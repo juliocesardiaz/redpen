@@ -71,6 +71,34 @@
     </aside>
   </main>
 
+  <!-- Floating "+ Comment" button, positioned near the current selection. -->
+  <button id="comment-btn" class="comment-btn hidden" type="button" aria-label="Add comment">+ Comment</button>
+
+  <!-- Comment editor modal. Structure is minimal for step 2; step 3 adds the
+       type selector, step 5 adds tag chips, step 7 adds the markdown preview. -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="comment-modal" class="modal">
+      <header class="modal-header">
+        <h2 id="modal-title" class="modal-title">Add comment</h2>
+        <span id="modal-range" class="modal-range"></span>
+      </header>
+      <div class="modal-body">
+        <textarea
+          id="modal-textarea"
+          class="modal-textarea"
+          placeholder="Write a comment (plain text for now; markdown support arrives in step 7)"
+          spellcheck="false"
+          autocomplete="off"
+        ></textarea>
+        <p class="modal-hint">Tab indents. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel.</p>
+      </div>
+      <footer class="modal-footer">
+        <button id="modal-cancel" class="btn" type="button">Cancel</button>
+        <button id="modal-save" class="btn btn-primary" type="button">Save</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- highlight.js: try CDN first, fall back to vendored copy if it fails to load. -->
   <script>
     (function loadHighlightJS() {

@@ -312,11 +312,203 @@ body {
   gap: 8px;
 }
 
+.annotation-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.annotation-item:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+.annotation-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.annotation-range {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.annotation-type {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.annotation-preview {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .empty-hint {
   margin: 0;
   color: var(--text-faint);
   font-size: 13px;
   font-style: italic;
+}
+
+/* --- Annotation highlights on code ----------------------------------- */
+
+.annotation {
+  /* Base state shared by all types; type-specific styles refine. */
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 120ms ease;
+}
+.annotation-span {
+  background: rgba(240, 180, 41, 0.22);
+  box-shadow: inset 0 -2px 0 0 rgba(217, 119, 6, 0.85);
+}
+.annotation-span:hover {
+  background: rgba(240, 180, 41, 0.38);
+}
+.annotation.flash {
+  animation: flash-bg 900ms ease;
+}
+@keyframes flash-bg {
+  0% { background: rgba(240, 180, 41, 0.7); }
+  100% { background: rgba(240, 180, 41, 0.22); }
+}
+
+.empty-placeholder { user-select: none; -webkit-user-select: none; }
+
+/* --- Floating "+ Comment" button ------------------------------------- */
+
+.comment-btn {
+  position: fixed;
+  z-index: 50;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform 90ms ease, background 120ms ease;
+}
+.comment-btn:hover { background: var(--accent-strong); transform: translateY(-1px); }
+
+/* --- Modal ------------------------------------------------------------ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(16, 22, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fade-in 120ms ease-out;
+}
+.modal-backdrop.hidden { display: none; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 40px);
+  background: var(--bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.modal-range {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 140px;
+  max-height: 40vh;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+.modal-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+}
+
+.modal-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.modal-hint kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--bg-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
 }
 
 /* --- Utility ---------------------------------------------------------- */
