@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>redpen</title>
+  <link rel="stylesheet" href="vendor/highlight-theme.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-group">
+      <input id="student-name" class="meta-input" type="text" placeholder="Student name" autocomplete="off" />
+      <input id="assignment-name" class="meta-input" type="text" placeholder="Assignment" autocomplete="off" />
+      <select id="language-select" class="meta-input" aria-label="Language">
+        <option value="python">Python</option>
+        <option value="javascript">JavaScript</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+      </select>
+      <span class="score-group" aria-label="Score">
+        <input id="score-earned" class="score-input" type="number" min="0" step="1" placeholder="0" />
+        <span class="score-slash">/</span>
+        <input id="score-total" class="score-input" type="number" min="0" step="1" placeholder="0" />
+      </span>
+    </div>
+    <div class="topbar-group topbar-right">
+      <button id="btn-tags" class="btn" type="button" disabled title="Coming in step 5">Tags</button>
+      <button id="btn-export" class="btn btn-primary" type="button" disabled title="Coming in step 8">Export HTML</button>
+      <button id="btn-new" class="btn" type="button">New</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="code-column" aria-label="Code">
+      <div id="code-empty" class="code-empty">
+        <textarea
+          id="code-input"
+          class="code-input"
+          placeholder="Paste student code here&#10;&#10;Choose the language in the top bar, then paste. The code will render with syntax highlighting and line numbers."
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+        ></textarea>
+        <div class="code-empty-actions">
+          <button id="btn-render" class="btn btn-primary" type="button">Render code</button>
+        </div>
+      </div>
+
+      <div id="code-view" class="code-view hidden" aria-hidden="true">
+        <div class="code-toolbar">
+          <span id="code-toolbar-status" class="code-toolbar-status">Editable — no annotations yet.</span>
+          <button id="btn-edit-code" class="btn btn-small" type="button">Edit code</button>
+        </div>
+        <pre class="code-pre"><code id="code-lines" class="code-lines hljs"></code></pre>
+      </div>
+    </section>
+
+    <aside class="sidebar" aria-label="Annotations">
+      <section class="sidebar-section">
+        <label class="sidebar-label" for="overall-comment">Overall comment</label>
+        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback (markdown supported later)"></textarea>
+      </section>
+
+      <section class="sidebar-section sidebar-annotations">
+        <h3 class="sidebar-label">Annotations</h3>
+        <div id="annotation-list" class="annotation-list">
+          <p class="empty-hint">No annotations yet. Select code to add one.</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- highlight.js: try CDN first, fall back to vendored copy if it fails to load. -->
+  <script>
+    (function loadHighlightJS() {
+      var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
+      var FALLBACK = 'vendor/highlight.min.js';
+      function inject(src, onload, onerror) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        s.onload = onload;
+        s.onerror = onerror;
+        document.head.appendChild(s);
+      }
+      inject(CDN, bootApp, function () { inject(FALLBACK, bootApp, function () {
+        document.body.innerHTML = '<p style="padding:2rem;font-family:system-ui">Failed to load highlight.js — check your network or the vendor/ folder.</p>';
+      }); });
+      function bootApp() {
+        var s = document.createElement('script');
+        s.src = 'app.js';
+        s.defer = false;
+        document.head.appendChild(s);
+      }
+    })();
+  </script>
+</body>
+</html>
