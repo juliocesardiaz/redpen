@@ -1,7 +1,7 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 3 (span + line-range + block types).
- * Later steps will extend with tooltip, tags, markdown, export.
+ * Build order: currently at Step 3b (annotation types + tooltip).
+ * Later steps will extend with tags, markdown, export.
  */
 
 (function () {
@@ -73,6 +73,8 @@
     modalSave: document.getElementById('modal-save'),
     modalCancel: document.getElementById('modal-cancel'),
     typeSelector: document.getElementById('type-selector'),
+    tooltip: document.getElementById('tooltip'),
+    tooltipContent: document.getElementById('tooltip-content'),
   };
 
   // Source-of-truth copy of the code split into lines; used for clamping
@@ -198,12 +200,26 @@
         .filter(function (w) { return w.width > 0; });
       wraps.sort(function (x, y) { return y.width - x.width; });
 
+      // Line/block flags are computed from the *unfiltered* list so an empty
+      // line in the middle of a multi-line range still renders the wash and
+      // border — width-0 wraps get filtered out above but the line itself is
+      // still inside the annotation.
       let hasLineRange = false;
       let hasBlock = false;
-      for (const w of wraps) {
-        const a = w.annotation;
+      let smallestLineLevelId = null;
+      let smallestLineLevelWidth = Infinity;
+      for (const a of annotationsByLine[lineNum] || []) {
+        if (a.type !== 'line-range' && a.type !== 'block') continue;
         if (a.type === 'line-range') hasLineRange = true;
         if (a.type === 'block') hasBlock = true;
+        const coverage = (a.range.endLine - a.range.startLine + 1);
+        if (coverage < smallestLineLevelWidth) {
+          smallestLineLevelWidth = coverage;
+          smallestLineLevelId = a.id;
+        }
+      }
+      for (const w of wraps) {
+        const a = w.annotation;
         const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '">';
         lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
       }
@@ -212,6 +228,10 @@
       row.className = 'line';
       if (hasLineRange) row.classList.add('has-line-range');
       if (hasBlock) row.classList.add('has-block');
+      // Smallest line-level annotation on this line is used as the fallback
+      // click target when the user clicks line-content outside any inner span
+      // (e.g., trailing whitespace or an empty line inside a block range).
+      if (smallestLineLevelId) row.dataset.lineLevelAnnotationId = smallestLineLevelId;
       row.dataset.line = String(i + 1);
       const gutter = document.createElement('span');
       gutter.className = 'line-number';
@@ -352,6 +372,7 @@
       submission.annotations = [];
       renderAnnotationList();
     }
+    closeTooltip();
     el.codeInput.value = submission.code;
     submission.code = '';
     submission.updatedAt = Date.now();
@@ -493,7 +514,13 @@
   }
 
   function positionCommentButton(range) {
-    const rect = range.getBoundingClientRect();
+    // For multi-line selections, getBoundingClientRect() returns a rect that
+    // spans the widest line — which anchors the button at the right edge of
+    // the viewport, not next to the actual selection end. getClientRects()
+    // returns one rect per visual line; the last one is the end of the
+    // selection on its final line, which is the right anchor point.
+    const rects = range.getClientRects();
+    const anchor = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
     const btn = el.commentBtn;
     // Park offscreen before unhiding so we can measure without a visible flash
     // at the previous coords.
@@ -501,11 +528,11 @@
     btn.style.top = '-9999px';
     btn.classList.remove('hidden');
     const w = btn.offsetWidth;
-    let left = rect.right + 6;
-    let top = rect.top - 4;
-    if (top < 8) top = rect.bottom + 6;
+    let left = anchor.right + 6;
+    let top = anchor.top - 4;
+    if (top < 8) top = anchor.bottom + 6;
     const maxLeft = window.innerWidth - w - 8;
-    if (left > maxLeft) left = Math.max(8, rect.left - w - 6);
+    if (left > maxLeft) left = Math.max(8, anchor.left - w - 6);
     btn.style.left = left + 'px';
     btn.style.top = top + 'px';
   }
@@ -578,6 +605,7 @@
     submission.annotations.push(annotation);
     submission.updatedAt = now;
     closeCommentModal();
+    closeTooltip();
     hideCommentButton();
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
@@ -595,6 +623,142 @@
       return 'L' + r.startLine;
     }
     return 'L' + r.startLine + '–L' + r.endLine;
+  }
+
+  // ------------------------------------------------------------------
+  // Tooltip (single instance; repositioned + repopulated per open)
+  // ------------------------------------------------------------------
+
+  function getAnnotationById(id) {
+    for (const a of submission.annotations) if (a.id === id) return a;
+    return null;
+  }
+
+  /**
+   * Resolve a click inside the code view to the annotation whose tooltip
+   * should show. Innermost-wins: we climb from event.target looking for the
+   * nearest [data-annotation-id]. If the click landed on line-content with no
+   * annotation span ancestor (e.g., trailing whitespace or an empty line
+   * inside a block range) we fall back to the smallest line-level annotation
+   * tagged on that row.
+   */
+  function resolveAnnotationForClick(target) {
+    let node = target;
+    while (node && node !== el.codeLines) {
+      if (node.dataset && node.dataset.annotationId) return { id: node.dataset.annotationId, anchor: node };
+      node = node.parentElement;
+    }
+    // Line-level fallback
+    let lineEl = target;
+    while (lineEl && lineEl !== el.codeLines && !(lineEl.classList && lineEl.classList.contains('line'))) {
+      lineEl = lineEl.parentElement;
+    }
+    if (lineEl && lineEl.dataset && lineEl.dataset.lineLevelAnnotationId) {
+      return { id: lineEl.dataset.lineLevelAnnotationId, anchor: lineEl.querySelector('.line-content') || lineEl };
+    }
+    return null;
+  }
+
+  function openTooltip(annotationId, anchorEl) {
+    const annotation = getAnnotationById(annotationId);
+    if (!annotation || !anchorEl) return;
+    renderTooltipContent(annotation);
+    el.tooltip.dataset.annotationId = annotationId;
+    el.tooltip.classList.remove('hidden');
+    positionTooltip(anchorEl);
+  }
+
+  function closeTooltip() {
+    el.tooltip.classList.add('hidden');
+    el.tooltip.dataset.annotationId = '';
+  }
+
+  function renderTooltipContent(annotation) {
+    // Step 3b: plain text only. Step 5 adds tag pills; step 7 adds markdown.
+    el.tooltipContent.innerHTML = '';
+    for (let i = 0; i < annotation.comments.length; i++) {
+      if (i > 0) {
+        const hr = document.createElement('hr');
+        hr.className = 'tooltip-divider';
+        el.tooltipContent.appendChild(hr);
+      }
+      const body = document.createElement('div');
+      body.className = 'tooltip-comment';
+      body.textContent = annotation.comments[i].text;
+      el.tooltipContent.appendChild(body);
+    }
+  }
+
+  function positionTooltip(anchorEl) {
+    const tt = el.tooltip;
+    // Park off-screen to measure width/height at current content.
+    tt.style.left = '-9999px';
+    tt.style.top = '-9999px';
+    tt.style.maxHeight = '';
+    // Force layout by reading size.
+    const ttW = tt.offsetWidth;
+    const ttH = tt.offsetHeight;
+
+    // For line-level annotations (line-range / block), the "anchor" may be
+    // the whole .line-content. Use the first visible rect of the anchor —
+    // placing the tooltip directly below the start of that element is the
+    // most readable choice.
+    const rects = anchorEl.getClientRects ? anchorEl.getClientRects() : [];
+    const rect = rects.length > 0 ? rects[0] : anchorEl.getBoundingClientRect();
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+    const gap = 10;
+    const mobile = vw < 560;
+
+    let left;
+    let top;
+    let placement = 'below';
+
+    if (mobile) {
+      // Span 90vw, centred horizontally, below the anchor.
+      const target = Math.min(ttW, Math.floor(vw * 0.9));
+      left = Math.max(margin, Math.floor((vw - target) / 2));
+    } else {
+      left = rect.left;
+    }
+
+    top = rect.bottom + gap;
+    if (top + ttH > vh - margin) {
+      const above = rect.top - gap - ttH;
+      if (above >= margin) { top = above; placement = 'above'; }
+      else {
+        // Not enough room either way — keep below but cap height with scroll.
+        tt.style.maxHeight = (vh - top - margin) + 'px';
+      }
+    }
+
+    const maxLeft = vw - margin - ttW;
+    if (left > maxLeft) left = Math.max(margin, maxLeft);
+    if (left < margin) left = margin;
+
+    tt.style.left = left + 'px';
+    tt.style.top = top + 'px';
+    tt.dataset.placement = placement;
+
+    // Position arrow horizontally under the anchor's mid-point, clamped so
+    // it never runs off the tooltip's rounded corners.
+    const arrow = tt.querySelector('.tooltip-arrow');
+    const anchorMid = rect.left + rect.width / 2;
+    const rawX = anchorMid - left;
+    const arrowX = Math.max(18, Math.min(ttW - 18, rawX));
+    arrow.style.left = arrowX + 'px';
+  }
+
+  function repositionTooltipIfOpen() {
+    if (el.tooltip.classList.contains('hidden')) return;
+    const id = el.tooltip.dataset.annotationId;
+    if (!id) return;
+    // Re-anchor on the first span that still matches this annotation id.
+    const anchor = el.codeLines.querySelector('[data-annotation-id="' + cssEscape(id) + '"]');
+    if (!anchor) { closeTooltip(); return; }
+    positionTooltip(anchor);
   }
 
   // ------------------------------------------------------------------
@@ -701,6 +865,41 @@
     el.btnEditCode.addEventListener('click', returnToEdit);
   }
 
+  function wireTooltip() {
+    // Click inside the code view opens/toggles the tooltip for the resolved
+    // annotation. Use event.target directly so the innermost annotation wins.
+    el.codeLines.addEventListener('click', function (e) {
+      // Ignore clicks that are the tail of a drag-selection — those should
+      // not open a tooltip.
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      const hit = resolveAnnotationForClick(e.target);
+      if (!hit) return;
+      e.stopPropagation();
+      if (el.tooltip.dataset.annotationId === hit.id && !el.tooltip.classList.contains('hidden')) {
+        closeTooltip();
+        return;
+      }
+      openTooltip(hit.id, hit.anchor);
+    });
+
+    // Clicks anywhere else close the tooltip — but not clicks inside the
+    // tooltip itself (so a student can select text inside to copy).
+    document.addEventListener('mousedown', function (e) {
+      if (el.tooltip.classList.contains('hidden')) return;
+      if (el.tooltip.contains(e.target)) return;
+      if (el.codeLines.contains(e.target) && resolveAnnotationForClick(e.target)) return;
+      closeTooltip();
+    });
+
+    window.addEventListener('resize', repositionTooltipIfOpen);
+    el.codeView.addEventListener('scroll', function () {
+      // While scrolling, re-anchor or hide when the anchor leaves the view.
+      if (el.tooltip.classList.contains('hidden')) return;
+      repositionTooltipIfOpen();
+    }, true);
+  }
+
   function wireSelectionAndModal() {
     el.codeLines.addEventListener('mouseup', onCodeMouseUp);
     // Keyboard selection (shift+arrow) also needs to refresh the button.
@@ -755,6 +954,7 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (!el.modalBackdrop.classList.contains('hidden')) closeCommentModal();
+        if (!el.tooltip.classList.contains('hidden')) closeTooltip();
         hideCommentButton();
       }
     });
@@ -792,6 +992,7 @@
     el.overallComment.value = '';
     el.codeInput.value = '';
     closeCommentModal();
+    closeTooltip();
     hideCommentButton();
     renderAnnotationList();
     showEmptyView();
@@ -809,6 +1010,7 @@
     wireMetadata();
     wireCodeInput();
     wireSelectionAndModal();
+    wireTooltip();
     wireTopbar();
     renderAnnotationList();
     showEmptyView();

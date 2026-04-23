@@ -74,6 +74,13 @@
   <!-- Floating "+ Comment" button, positioned near the current selection. -->
   <button id="comment-btn" class="comment-btn hidden" type="button" aria-label="Add comment">+ Comment</button>
 
+  <!-- Single-instance tooltip. Repositioned and repopulated per open; never
+       recreated. Shared with viewer mode (the exported HTML). -->
+  <div id="tooltip" class="tooltip hidden" role="dialog" aria-live="polite" data-placement="below">
+    <span class="tooltip-arrow" aria-hidden="true"></span>
+    <div id="tooltip-content" class="tooltip-content"></div>
+  </div>
+
   <!-- Comment editor modal. Structure is minimal for step 2; step 3 adds the
        type selector, step 5 adds tag chips, step 7 adds the markdown preview. -->
   <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
