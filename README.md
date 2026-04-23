@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/logo.png" alt="redpen logo" width="400">
+</div>
+
 # redpen
 
 A lightweight, zero-setup tool for grading student code submissions with inline annotations. Designed for teachers to provide clear, Genius.com-style inline feedback that is easy to read, completely self-contained, and works fully offline.
