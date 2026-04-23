@@ -177,22 +177,30 @@
     sourceLines = code.split('\n');
     const lineHtmls = highlightByLines(code, submission.language);
 
-    // Apply annotation wrappers per line. Step 2 only produces single-line
-    // spans, but the shape generalises: each line gets wraps for every
-    // annotation range that touches it.
+    // Apply annotation wrappers per line. Widest first so the bigger range
+    // becomes the outer <span> and smaller ranges nest inside it — this is
+    // what makes the innermost (most specific) annotation win on click,
+    // since inner DOM elements receive the event first. Array.sort is
+    // stable, so equal-width annotations keep insertion order.
     const annotationsByLine = indexAnnotationsByLine(submission.annotations, sourceLines.length);
 
     const frag = document.createDocumentFragment();
     for (let i = 0; i < lineHtmls.length; i++) {
       let lineHtml = lineHtmls[i];
-      const onThisLine = annotationsByLine[i + 1] || [];
-      // Apply wraps in creation order so later-added annotations appear nested
-      // inside earlier ones when they overlap.
-      for (const a of onThisLine) {
-        const [startCol, endCol] = colRangeOnLine(a, i + 1, sourceLines[i].length);
-        if (startCol >= endCol) continue;
+      const lineNum = i + 1;
+      const lineLen = sourceLines[i].length;
+      const wraps = (annotationsByLine[lineNum] || [])
+        .map(function (a) {
+          const r = colRangeOnLine(a, lineNum, lineLen);
+          return { annotation: a, startCol: r[0], endCol: r[1], width: r[1] - r[0] };
+        })
+        .filter(function (w) { return w.width > 0; });
+      wraps.sort(function (x, y) { return y.width - x.width; });
+
+      for (const w of wraps) {
+        const a = w.annotation;
         const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '">';
-        lineHtml = wrapColumnRange(lineHtml, startCol, endCol, openTag, '</span>');
+        lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
       }
 
       const row = document.createElement('div');
