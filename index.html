@@ -83,6 +83,11 @@
         <span id="modal-range" class="modal-range"></span>
       </header>
       <div class="modal-body">
+        <div class="type-selector" id="type-selector" role="radiogroup" aria-label="Annotation type">
+          <label class="type-option"><input type="radio" name="annotation-type" value="span" checked /><span>Span</span></label>
+          <label class="type-option"><input type="radio" name="annotation-type" value="line-range" /><span>Line range</span></label>
+          <label class="type-option"><input type="radio" name="annotation-type" value="block" /><span>Block</span></label>
+        </div>
         <textarea
           id="modal-textarea"
           class="modal-textarea"

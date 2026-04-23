@@ -375,6 +375,40 @@ body {
 .annotation-span:hover {
   background: rgba(240, 180, 41, 0.38);
 }
+
+/* Line-range and block wrap the whole line's text but the full-width
+ * background / left-border effect is applied to the containing .line-content
+ * cell so it extends beyond the text. The inner <span> still exists so
+ * event.target resolves to the annotation for tooltip routing (step 3b). */
+.annotation-line-range,
+.annotation-block {
+  /* Deliberately no per-span background — the line itself carries the wash. */
+  background: transparent;
+}
+
+.line.has-line-range .line-content {
+  background: rgba(52, 152, 219, 0.12);
+}
+.line.has-line-range:hover .line-content {
+  background: rgba(52, 152, 219, 0.18);
+}
+
+.line.has-block .line-content {
+  background: rgba(52, 152, 219, 0.06);
+  /* 3px left accent; compensate padding so the gutter→text gap stays stable. */
+  border-left: 3px solid rgba(52, 152, 219, 0.75);
+  padding-left: 11px;
+}
+.line.has-block:hover .line-content {
+  background: rgba(52, 152, 219, 0.12);
+}
+
+/* When both apply on the same line, prefer the block's left border on top of
+ * the line-range wash. */
+.line.has-line-range.has-block .line-content {
+  background: rgba(52, 152, 219, 0.14);
+}
+
 .annotation.flash {
   animation: flash-bg 900ms ease;
 }
@@ -462,6 +496,33 @@ body {
   flex-direction: column;
   gap: 8px;
   overflow: auto;
+}
+
+.type-selector {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+.type-option {
+  flex: 1;
+  text-align: center;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+  transition: background 120ms ease, color 120ms ease;
+  border-right: 1px solid var(--border);
+}
+.type-option:last-child { border-right: none; }
+.type-option input { position: absolute; opacity: 0; pointer-events: none; }
+.type-option:hover { background: var(--bg-muted); }
+.type-option.selected {
+  background: rgba(43, 108, 176, 0.10);
+  color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 .modal-textarea {

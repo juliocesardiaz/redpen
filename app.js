@@ -1,7 +1,7 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 2 (+ span annotations).
- * Later steps will extend with line-range/block, tooltip, tags, markdown, export.
+ * Build order: currently at Step 3 (span + line-range + block types).
+ * Later steps will extend with tooltip, tags, markdown, export.
  */
 
 (function () {
@@ -72,6 +72,7 @@
     modalTextarea: document.getElementById('modal-textarea'),
     modalSave: document.getElementById('modal-save'),
     modalCancel: document.getElementById('modal-cancel'),
+    typeSelector: document.getElementById('type-selector'),
   };
 
   // Source-of-truth copy of the code split into lines; used for clamping
@@ -197,14 +198,20 @@
         .filter(function (w) { return w.width > 0; });
       wraps.sort(function (x, y) { return y.width - x.width; });
 
+      let hasLineRange = false;
+      let hasBlock = false;
       for (const w of wraps) {
         const a = w.annotation;
+        if (a.type === 'line-range') hasLineRange = true;
+        if (a.type === 'block') hasBlock = true;
         const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '">';
         lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
       }
 
       const row = document.createElement('div');
       row.className = 'line';
+      if (hasLineRange) row.classList.add('has-line-range');
+      if (hasBlock) row.classList.add('has-block');
       row.dataset.line = String(i + 1);
       const gutter = document.createElement('span');
       gutter.className = 'line-number';
@@ -475,12 +482,9 @@
     }
     const coords = getLineColumnFromRange(range);
     if (!coords) { hideCommentButton(); return; }
-    // Step 2: span only. Ignore multi-line selections — step 3 enables them.
-    if (coords.startLine !== coords.endLine) {
-      hideCommentButton();
-      return;
-    }
-    if (coords.startCol === coords.endCol) {
+    // Reject zero-width selections (happens when selection is entirely inside
+    // an empty-line placeholder or the gutter).
+    if (coords.startLine === coords.endLine && coords.startCol === coords.endCol) {
       hideCommentButton();
       return;
     }
@@ -520,9 +524,27 @@
     editingRange = range;
     el.modalRange.textContent = formatRangeLabel(range);
     el.modalTextarea.value = '';
+    // Auto-suggest the type: single line → span, multi-line → line range.
+    // Block is always manual — the teacher opts into it when they want the
+    // left-border treatment for a structured region.
+    const suggested = range.startLine === range.endLine ? 'span' : 'line-range';
+    setSelectedType(suggested);
     el.modalBackdrop.classList.remove('hidden');
     // Delay focus so the transition plays and the textarea actually receives it.
     setTimeout(function () { el.modalTextarea.focus(); }, 0);
+  }
+
+  function setSelectedType(type) {
+    const radios = el.typeSelector.querySelectorAll('input[name="annotation-type"]');
+    radios.forEach(function (r) {
+      r.checked = r.value === type;
+      r.parentElement.classList.toggle('selected', r.checked);
+    });
+  }
+
+  function getSelectedType() {
+    const r = el.typeSelector.querySelector('input[name="annotation-type"]:checked');
+    return r ? r.value : 'span';
   }
 
   function closeCommentModal() {
@@ -538,10 +560,18 @@
     }
     if (!editingRange) { closeCommentModal(); return; }
     const now = Date.now();
+    const type = getSelectedType();
+    // Line-range and block are whole-line; they don't carry column offsets.
+    // Span keeps columns. This matches the data-model rule in the spec.
+    const range = { startLine: editingRange.startLine, endLine: editingRange.endLine };
+    if (type === 'span') {
+      range.startCol = editingRange.startCol;
+      range.endCol = editingRange.endCol;
+    }
     const annotation = {
       id: uuid(),
-      type: 'span',
-      range: { ...editingRange },
+      type: type,
+      range: range,
       comments: [{ id: uuid(), text: text, createdAt: now }],
       tagIds: [],
     };
@@ -549,7 +579,6 @@
     submission.updatedAt = now;
     closeCommentModal();
     hideCommentButton();
-    // Clear the browser selection so the wrap-span is visible without overlay.
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
     renderCodeView();
@@ -706,6 +735,10 @@
     el.modalCancel.addEventListener('click', closeCommentModal);
     el.modalBackdrop.addEventListener('click', function (e) {
       if (e.target === el.modalBackdrop) closeCommentModal();
+    });
+
+    el.typeSelector.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'annotation-type') setSelectedType(e.target.value);
     });
 
     // Tab-to-indent inside the comment textarea. Shift+Tab dedents or escapes.
