@@ -216,10 +216,13 @@
     // Apply annotation wrappers per line. Widest first so the bigger range
     // becomes the outer <span> and smaller ranges nest inside it — this is
     // what makes the innermost (most specific) annotation win on click,
-    // since inner DOM elements receive the event first. Array.sort is
-    // stable, so equal-width annotations keep insertion order.
+    // since inner DOM elements receive the event first. On ties we put
+    // block > line-range > span (i.e., a span that happens to cover a full
+    // line still nests *inside* a block / line-range on the same line,
+    // otherwise clicking the span would resolve to the line-level annotation).
     const annotationsByLine = indexAnnotationsByLine(submission.annotations, sourceLines.length);
 
+    const TYPE_RANK = { block: 2, 'line-range': 1, span: 0 };
     const frag = document.createDocumentFragment();
     for (let i = 0; i < lineHtmls.length; i++) {
       let lineHtml = lineHtmls[i];
@@ -231,7 +234,10 @@
           return { annotation: a, startCol: r[0], endCol: r[1], width: r[1] - r[0] };
         })
         .filter(function (w) { return w.width > 0; });
-      wraps.sort(function (x, y) { return y.width - x.width; });
+      wraps.sort(function (x, y) {
+        if (y.width !== x.width) return y.width - x.width;
+        return (TYPE_RANK[y.annotation.type] || 0) - (TYPE_RANK[x.annotation.type] || 0);
+      });
 
       // Line/block flags are computed from the *unfiltered* list so an empty
       // line in the middle of a multi-line range still renders the wash and

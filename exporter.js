@@ -10,17 +10,19 @@
     }
 
     try {
-      // 1. Fetch required assets
-      const assets = await Promise.all([
-        fetch('viewer-template.html').then(r => r.text()),
-        fetch('viewer.css').then(r => r.text()),
-        fetch('vendor/highlight-theme.css').then(r => r.text()),
-        fetch('viewer-runtime.js').then(r => r.text()),
-        fetch('vendor/highlight.min.js').then(r => r.text()),
-        fetch('vendor/highlight-diff.min.js').then(r => r.text())
-      ]);
-
-      const [template, viewerCss, themeCss, viewerRuntimeJs, hljsMain, hljsDiff] = assets;
+      // Assets are inlined in viewer-assets.js (loaded before this script) so
+      // export works from file:// without CORS-blocked fetches.
+      const A = window.RedpenAssets;
+      if (!A) {
+        alert('Export failed: viewer-assets.js did not load.');
+        return;
+      }
+      const template = A.template;
+      const viewerCss = A.viewerCss;
+      const themeCss = A.themeCss;
+      const viewerRuntimeJs = A.viewerRuntime;
+      const hljsMain = A.hljsMain;
+      const hljsDiff = A.hljsDiff;
 
       let codeHtml = document.getElementById('code-lines') ? document.getElementById('code-lines').innerHTML : '';
 
