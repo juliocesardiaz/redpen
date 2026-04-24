@@ -1,6 +1,6 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 5 (tags).
+ * Build order: currently at Step 6 (metadata polish + overall preview).
  * Later steps will extend with markdown, export, viewer polish.
  */
 
@@ -75,6 +75,7 @@
     codeToolbarStatus: document.getElementById('code-toolbar-status'),
     btnEditCode: document.getElementById('btn-edit-code'),
     overallComment: document.getElementById('overall-comment'),
+    overallPreview: document.getElementById('overall-preview'),
     annotationList: document.getElementById('annotation-list'),
     commentBtn: document.getElementById('comment-btn'),
     modalBackdrop: document.getElementById('modal-backdrop'),
@@ -1335,7 +1336,64 @@
     el.overallComment.addEventListener('input', function () {
       submission.overallComment = el.overallComment.value;
       submission.updatedAt = Date.now();
+      // Live-update the preview when it's currently showing.
+      if (overallView === 'preview') renderOverallPreview();
     });
+
+    // Edit / Preview toggle for the overall comment.
+    const toggleBtns = document.querySelectorAll('[data-overall-view]');
+    toggleBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setOverallView(btn.dataset.overallView);
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Overall comment preview
+  // ------------------------------------------------------------------
+
+  let overallView = 'edit';
+
+  function setOverallView(view) {
+    overallView = view === 'preview' ? 'preview' : 'edit';
+    document.querySelectorAll('[data-overall-view]').forEach(function (b) {
+      const active = b.dataset.overallView === overallView;
+      b.classList.toggle('selected', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (overallView === 'preview') {
+      renderOverallPreview();
+      el.overallComment.classList.add('hidden');
+      el.overallPreview.classList.remove('hidden');
+    } else {
+      el.overallComment.classList.remove('hidden');
+      el.overallPreview.classList.add('hidden');
+    }
+  }
+
+  function renderOverallPreview() {
+    const src = submission.overallComment || '';
+    if (!src.trim()) {
+      el.overallPreview.innerHTML = '<p class="empty-hint">Nothing to preview yet.</p>';
+      return;
+    }
+    el.overallPreview.innerHTML = renderMarkdown(src);
+  }
+
+  /**
+   * Markdown renderer. Step 6 ships a minimal placeholder: HTML-escape and
+   * preserve line breaks. Step 7 replaces this with the full supported
+   * subset (code fences, inline code, bold/italic, lists, links) and wires
+   * it through the tooltip content as well.
+   */
+  function renderMarkdown(source) {
+    const escaped = escapeHtml(source);
+    // Blank-line-separated paragraphs with <br> for soft breaks.
+    const paragraphs = escaped.split(/\n{2,}/);
+    return paragraphs
+      .map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; })
+      .join('');
   }
 
   // ------------------------------------------------------------------
@@ -1376,6 +1434,39 @@
       }
       openTooltip(hit.id, hit.anchor);
     });
+
+    // Cross-element hover: a span annotation that crosses hljs token
+    // boundaries becomes several sibling <span>s. Rather than relying on
+    // :hover (which fires per-element) we track the annotation under the
+    // cursor and toggle a .hovered class on every DOM element that shares
+    // the id, plus the .line rows for a line-level annotation's full range.
+    let hoveredAnnotationId = null;
+    function applyHovered(id) {
+      const parts = el.codeLines.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
+      parts.forEach(function (p) { p.classList.add('hovered'); });
+      const a = getAnnotationById(id);
+      if (a && (a.type === 'line-range' || a.type === 'block')) {
+        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
+          const row = el.codeLines.querySelector('.line[data-line="' + ln + '"]');
+          if (row) row.classList.add('hovered');
+        }
+      }
+    }
+    function clearHovered() {
+      const parts = el.codeLines.querySelectorAll('.annotation.hovered, .line.hovered');
+      parts.forEach(function (p) { p.classList.remove('hovered'); });
+    }
+    function setHovered(id) {
+      if (id === hoveredAnnotationId) return;
+      clearHovered();
+      hoveredAnnotationId = id;
+      if (id) applyHovered(id);
+    }
+    el.codeLines.addEventListener('mousemove', function (e) {
+      const hit = resolveAnnotationForClick(e.target);
+      setHovered(hit ? hit.id : null);
+    });
+    el.codeLines.addEventListener('mouseleave', function () { setHovered(null); });
 
     // Clicks anywhere else close the tooltip — but not clicks inside the
     // tooltip itself (so a student can select text inside to copy).
@@ -1491,6 +1582,7 @@
     el.scoreTotal.value = '';
     el.overallComment.value = '';
     el.codeInput.value = '';
+    setOverallView('edit');
     closeCommentModal();
     closeTooltip();
     hideCommentButton();

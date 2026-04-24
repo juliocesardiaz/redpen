@@ -58,8 +58,15 @@
 
     <aside class="sidebar" aria-label="Annotations">
       <section class="sidebar-section">
-        <label class="sidebar-label" for="overall-comment">Overall comment</label>
-        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback (markdown supported later)"></textarea>
+        <div class="sidebar-label-row">
+          <label class="sidebar-label" for="overall-comment">Overall comment</label>
+          <div class="view-toggle" role="tablist" aria-label="Overall comment view">
+            <button type="button" class="view-toggle-btn selected" data-overall-view="edit" role="tab" aria-selected="true">Edit</button>
+            <button type="button" class="view-toggle-btn" data-overall-view="preview" role="tab" aria-selected="false">Preview</button>
+          </div>
+        </div>
+        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback. Markdown supported in step 7; for now, line breaks and basic formatting render as-is."></textarea>
+        <div id="overall-preview" class="overall-preview hidden" aria-live="polite"></div>
       </section>
 
       <section class="sidebar-section sidebar-annotations">
