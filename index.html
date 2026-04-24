@@ -25,7 +25,7 @@
       </span>
     </div>
     <div class="topbar-group topbar-right">
-      <button id="btn-tags" class="btn" type="button" disabled title="Coming in step 5">Tags</button>
+      <button id="btn-tags" class="btn" type="button">Tags</button>
       <button id="btn-export" class="btn btn-primary" type="button" disabled title="Coming in step 8">Export HTML</button>
       <button id="btn-new" class="btn" type="button">New</button>
     </div>
@@ -81,6 +81,24 @@
     <div id="tooltip-content" class="tooltip-content"></div>
   </div>
 
+  <!-- Tag manager modal. Top-bar "Tags" button opens this; also used for
+       full tag CRUD outside the comment editor's quick new-tag shortcut. -->
+  <div id="tag-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="tag-modal-title">
+    <div class="modal tag-modal">
+      <header class="modal-header">
+        <h2 id="tag-modal-title" class="modal-title">Tags</h2>
+      </header>
+      <div class="modal-body">
+        <div id="tag-rows" class="tag-rows"></div>
+        <button id="btn-add-tag-row" class="btn-ghost" type="button">+ New tag</button>
+      </div>
+      <footer class="modal-footer">
+        <span class="modal-footer-spacer"></span>
+        <button id="tag-modal-close" class="btn btn-primary" type="button">Done</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Comment editor modal. Structure is minimal for step 2; step 3 adds the
        type selector, step 5 adds tag chips, step 7 adds the markdown preview. -->
   <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -94,6 +112,15 @@
           <label class="type-option"><input type="radio" name="annotation-type" value="span" checked /><span>Span</span></label>
           <label class="type-option"><input type="radio" name="annotation-type" value="line-range" /><span>Line range</span></label>
           <label class="type-option"><input type="radio" name="annotation-type" value="block" /><span>Block</span></label>
+        </div>
+        <div class="tag-picker">
+          <div id="tag-chips" class="tag-chips" role="group" aria-label="Tags"></div>
+          <div id="new-tag-form" class="new-tag-form hidden">
+            <input id="new-tag-color" type="color" class="new-tag-color" value="#3498db" aria-label="New tag color" />
+            <input id="new-tag-label" type="text" class="new-tag-label" placeholder="New tag name" maxlength="40" />
+            <button id="new-tag-create" class="btn btn-small btn-primary" type="button">Create</button>
+            <button id="new-tag-cancel" class="btn btn-small" type="button">Cancel</button>
+          </div>
         </div>
         <div id="comment-blocks" class="comment-blocks"></div>
         <button id="btn-add-comment" class="btn-ghost" type="button">+ Add another comment</button>

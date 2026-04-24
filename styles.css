@@ -414,21 +414,24 @@ body {
   border-radius: 2px;
   transition: background-color 120ms ease;
 }
+/* The --hl custom property carries the annotation's primary-tag colour
+ * (set inline at render time). The default fallback keeps un-tagged
+ * annotations visible: yellow-ish for spans, blue-ish for line-level. */
 .annotation-span {
-  background: rgba(240, 180, 41, 0.22);
-  box-shadow: inset 0 -2px 0 0 rgba(217, 119, 6, 0.85);
+  --hl: #d97706;
+  background: color-mix(in srgb, var(--hl) 22%, transparent);
+  box-shadow: inset 0 -2px 0 0 var(--hl);
 }
 .annotation-span:hover {
-  background: rgba(240, 180, 41, 0.38);
+  background: color-mix(in srgb, var(--hl) 36%, transparent);
 }
 
 /* Line-range and block wrap the whole line's text but the full-width
  * background / left-border effect is applied to the containing .line-content
  * cell so it extends beyond the text. The inner <span> still exists so
- * event.target resolves to the annotation for tooltip routing (step 3b). */
+ * event.target resolves to the annotation for tooltip routing. */
 .annotation-line-range,
 .annotation-block {
-  /* Deliberately no per-span background — the line itself carries the wash. */
   background: transparent;
 }
 
@@ -438,40 +441,42 @@ body {
   transition: background-color 120ms ease, border-left-color 120ms ease;
 }
 
+.line {
+  --hl: #3498db;
+}
+
 .line.has-line-range .line-content {
-  background: rgba(52, 152, 219, 0.12);
+  background: color-mix(in srgb, var(--hl) 14%, transparent);
 }
 .line.has-line-range:hover .line-content {
-  background: rgba(52, 152, 219, 0.28);
-  box-shadow: inset 3px 0 0 0 rgba(52, 152, 219, 0.55);
+  background: color-mix(in srgb, var(--hl) 30%, transparent);
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--hl) 60%, transparent);
 }
 
 .line.has-block .line-content {
-  background: rgba(52, 152, 219, 0.06);
+  background: color-mix(in srgb, var(--hl) 7%, transparent);
   /* 3px left accent; compensate padding so the gutter→text gap stays stable. */
-  border-left: 3px solid rgba(52, 152, 219, 0.75);
+  border-left: 3px solid color-mix(in srgb, var(--hl) 80%, transparent);
   padding-left: 11px;
 }
 .line.has-block:hover .line-content {
-  background: rgba(52, 152, 219, 0.20);
-  border-left-color: rgba(41, 128, 185, 1);
+  background: color-mix(in srgb, var(--hl) 22%, transparent);
+  border-left-color: var(--hl);
 }
 
-/* When both apply on the same line, prefer the block's left border on top of
- * the line-range wash. */
 .line.has-line-range.has-block .line-content {
-  background: rgba(52, 152, 219, 0.14);
+  background: color-mix(in srgb, var(--hl) 16%, transparent);
 }
 .line.has-line-range.has-block:hover .line-content {
-  background: rgba(52, 152, 219, 0.28);
+  background: color-mix(in srgb, var(--hl) 30%, transparent);
 }
 
 .annotation.flash {
   animation: flash-bg 900ms ease;
 }
 @keyframes flash-bg {
-  0% { background: rgba(240, 180, 41, 0.7); }
-  100% { background: rgba(240, 180, 41, 0.22); }
+  0% { background: color-mix(in srgb, var(--hl, #d97706) 70%, transparent); }
+  100% { background: color-mix(in srgb, var(--hl, #d97706) 22%, transparent); }
 }
 
 .empty-placeholder { user-select: none; -webkit-user-select: none; }
@@ -580,6 +585,195 @@ body {
   color: var(--accent-strong);
   font-weight: 600;
   box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+/* --- Tag picker (inside comment modal) ------------------------------- */
+
+.tag-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  --tag-color: #888;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.tag-chip:hover {
+  border-color: color-mix(in srgb, var(--tag-color) 55%, var(--border));
+  color: var(--text);
+}
+.tag-chip.selected {
+  background: color-mix(in srgb, var(--tag-color) 16%, transparent);
+  border-color: var(--tag-color);
+  color: var(--text);
+}
+.tag-chip.selected .tag-chip-dot {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tag-color) 35%, transparent);
+}
+.tag-chip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tag-color);
+  flex-shrink: 0;
+}
+.tag-chip-add {
+  color: var(--text-faint);
+  border-style: dashed;
+}
+
+.new-tag-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+}
+.new-tag-color {
+  width: 30px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0;
+  background: var(--bg);
+  cursor: pointer;
+}
+.new-tag-label {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font: inherit;
+  outline: none;
+}
+.new-tag-label:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+}
+
+/* Shared tag pill used in the tooltip and sidebar entries. */
+.tag-pill {
+  --tag-color: #888;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--tag-color) 18%, transparent);
+  color: color-mix(in srgb, var(--tag-color) 80%, #000);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 55%, transparent);
+}
+.tag-pill-sm { font-size: 10px; padding: 1px 6px; }
+
+.tooltip-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.annotation-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* --- Tag manager modal ------------------------------------------------ */
+
+.tag-modal { max-width: 460px; }
+
+.tag-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.tag-swatch {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.tag-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.tag-swatch::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+.tag-label-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  outline: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.tag-label-input:hover { background: var(--bg-muted); }
+.tag-label-input:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+}
+
+.tag-delete {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tag-delete:hover {
+  background: rgba(192, 57, 43, 0.10);
+  border-color: rgba(192, 57, 43, 0.35);
+  color: var(--danger);
 }
 
 .comment-blocks {

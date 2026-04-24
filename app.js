@@ -1,7 +1,7 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 4 (multi-comment annotations + edit/delete).
- * Later steps will extend with tags, markdown, export.
+ * Build order: currently at Step 5 (tags).
+ * Later steps will extend with markdown, export, viewer polish.
  */
 
 (function () {
@@ -25,10 +25,21 @@
       score: { earned: null, total: null },
       overallComment: '',
       annotations: [],
-      tags: [],
+      tags: defaultTags(),
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  function defaultTags() {
+    // Seeded on first load and on "New". The spec fixes these five defaults.
+    return [
+      { id: uuid(), label: 'Logic',      color: '#e74c3c' },
+      { id: uuid(), label: 'Style',      color: '#3498db' },
+      { id: uuid(), label: 'Naming',     color: '#9b59b6' },
+      { id: uuid(), label: 'Efficiency', color: '#f39c12' },
+      { id: uuid(), label: 'Good',       color: '#27ae60' },
+    ];
   }
 
   function uuid() {
@@ -73,9 +84,19 @@
     modalSave: document.getElementById('modal-save'),
     modalCancel: document.getElementById('modal-cancel'),
     typeSelector: document.getElementById('type-selector'),
+    tagChips: document.getElementById('tag-chips'),
+    newTagForm: document.getElementById('new-tag-form'),
+    newTagColor: document.getElementById('new-tag-color'),
+    newTagLabel: document.getElementById('new-tag-label'),
+    newTagCreate: document.getElementById('new-tag-create'),
+    newTagCancel: document.getElementById('new-tag-cancel'),
     commentBlocks: document.getElementById('comment-blocks'),
     btnAddComment: document.getElementById('btn-add-comment'),
     btnDeleteAnnotation: document.getElementById('btn-delete-annotation'),
+    tagModalBackdrop: document.getElementById('tag-modal-backdrop'),
+    tagRows: document.getElementById('tag-rows'),
+    btnAddTagRow: document.getElementById('btn-add-tag-row'),
+    tagModalClose: document.getElementById('tag-modal-close'),
     tooltip: document.getElementById('tooltip'),
     tooltipContent: document.getElementById('tooltip-content'),
   };
@@ -100,6 +121,10 @@
   // { id: string|null, text: string, createdAt: number|null }. id/createdAt
   // are null for newly-added-but-not-yet-saved comments.
   let editingBlocks = [];
+
+  // Draft copy of the tag ids attached to the annotation being edited.
+  // Applied to the annotation on save.
+  let editingTagIds = [];
 
   // ------------------------------------------------------------------
   // Highlight.js configuration
@@ -181,6 +206,13 @@
     });
   }
 
+  // Tighter escape for attribute values built via string concatenation.
+  function escapeAttr(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
   function renderCodeView() {
     const code = submission.code;
     if (!code) {
@@ -217,7 +249,7 @@
       // still inside the annotation.
       let hasLineRange = false;
       let hasBlock = false;
-      let smallestLineLevelId = null;
+      let smallestLineLevel = null;
       let smallestLineLevelWidth = Infinity;
       for (const a of annotationsByLine[lineNum] || []) {
         if (a.type !== 'line-range' && a.type !== 'block') continue;
@@ -226,12 +258,14 @@
         const coverage = (a.range.endLine - a.range.startLine + 1);
         if (coverage < smallestLineLevelWidth) {
           smallestLineLevelWidth = coverage;
-          smallestLineLevelId = a.id;
+          smallestLineLevel = a;
         }
       }
       for (const w of wraps) {
         const a = w.annotation;
-        const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '">';
+        const tag = primaryTagForAnnotation(a);
+        const style = tag ? ' style="--hl:' + escapeAttr(tag.color) + '"' : '';
+        const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '"' + style + '>';
         lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
       }
 
@@ -242,7 +276,12 @@
       // Smallest line-level annotation on this line is used as the fallback
       // click target when the user clicks line-content outside any inner span
       // (e.g., trailing whitespace or an empty line inside a block range).
-      if (smallestLineLevelId) row.dataset.lineLevelAnnotationId = smallestLineLevelId;
+      // Its first tag's color also drives this line's wash/border.
+      if (smallestLineLevel) {
+        row.dataset.lineLevelAnnotationId = smallestLineLevel.id;
+        const tag = primaryTagForAnnotation(smallestLineLevel);
+        if (tag) row.style.setProperty('--hl', tag.color);
+      }
       row.dataset.line = String(i + 1);
       const gutter = document.createElement('span');
       gutter.className = 'line-number';
@@ -562,6 +601,7 @@
     editingAnnotationId = null;
     editingRange = range;
     editingBlocks = [blankBlock()];
+    editingTagIds = [];
     el.modalTitle.textContent = 'Add comment';
     el.modalRange.textContent = formatRangeLabel(range);
     // Auto-suggest the type: single line → span, multi-line → line range.
@@ -570,6 +610,8 @@
     const suggested = range.startLine === range.endLine ? 'span' : 'line-range';
     setSelectedType(suggested);
     el.btnDeleteAnnotation.classList.add('hidden');
+    hideNewTagForm();
+    renderTagChips();
     renderCommentBlocks();
     el.modalBackdrop.classList.remove('hidden');
     setTimeout(function () { focusFirstBlockTextarea(); }, 0);
@@ -585,10 +627,13 @@
       return { id: c.id, text: c.text, createdAt: c.createdAt };
     });
     if (editingBlocks.length === 0) editingBlocks = [blankBlock()];
+    editingTagIds = (a.tagIds || []).slice();
     el.modalTitle.textContent = 'Edit annotation';
     el.modalRange.textContent = formatRangeLabel(a.range);
     setSelectedType(a.type);
     el.btnDeleteAnnotation.classList.remove('hidden');
+    hideNewTagForm();
+    renderTagChips();
     renderCommentBlocks();
     el.modalBackdrop.classList.remove('hidden');
     setTimeout(function () { focusFirstBlockTextarea(); }, 0);
@@ -618,9 +663,11 @@
 
   function closeCommentModal() {
     el.modalBackdrop.classList.add('hidden');
+    hideNewTagForm();
     editingRange = null;
     editingAnnotationId = null;
     editingBlocks = [];
+    editingTagIds = [];
   }
 
   function renderCommentBlocks() {
@@ -708,6 +755,10 @@
     }
     const type = getSelectedType();
 
+    // Filter out tag ids that were deleted from the tag list since this
+    // annotation was first tagged (defensive — the UI should keep them in sync).
+    const tagIds = editingTagIds.filter(function (id) { return !!getTagById(id); });
+
     if (editingAnnotationId === null) {
       if (!editingRange) { closeCommentModal(); return; }
       const range = { startLine: editingRange.startLine, endLine: editingRange.endLine };
@@ -720,7 +771,7 @@
         type: type,
         range: range,
         comments: kept,
-        tagIds: [],
+        tagIds: tagIds,
       });
     } else {
       const a = getAnnotationById(editingAnnotationId);
@@ -739,6 +790,7 @@
         delete a.range.endCol;
       }
       a.comments = kept;
+      a.tagIds = tagIds;
     }
 
     submission.updatedAt = now;
@@ -837,8 +889,23 @@
   }
 
   function renderTooltipContent(annotation) {
-    // Step 3b: plain text only. Step 5 adds tag pills; step 7 adds markdown.
+    // Step 5: tag pills + plain-text comments. Step 7 swaps plain text for
+    // rendered markdown.
     el.tooltipContent.innerHTML = '';
+    if (annotation.tagIds && annotation.tagIds.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'tooltip-tags';
+      for (const id of annotation.tagIds) {
+        const t = getTagById(id);
+        if (!t) continue;
+        const pill = document.createElement('span');
+        pill.className = 'tag-pill';
+        pill.style.setProperty('--tag-color', t.color);
+        pill.textContent = t.label;
+        row.appendChild(pill);
+      }
+      if (row.children.length > 0) el.tooltipContent.appendChild(row);
+    }
     for (let i = 0; i < annotation.comments.length; i++) {
       if (i > 0) {
         const hr = document.createElement('hr');
@@ -925,6 +992,197 @@
   }
 
   // ------------------------------------------------------------------
+  // Tags
+  // ------------------------------------------------------------------
+
+  function getTagById(id) {
+    for (const t of submission.tags) if (t.id === id) return t;
+    return null;
+  }
+
+  function primaryTagForAnnotation(a) {
+    if (!a.tagIds || a.tagIds.length === 0) return null;
+    for (const id of a.tagIds) {
+      const t = getTagById(id);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  /** Render the multi-select chip list inside the comment modal. */
+  function renderTagChips() {
+    el.tagChips.innerHTML = '';
+    for (const t of submission.tags) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'tag-chip';
+      chip.dataset.tagId = t.id;
+      chip.style.setProperty('--tag-color', t.color);
+      const selected = editingTagIds.indexOf(t.id) !== -1;
+      if (selected) chip.classList.add('selected');
+      chip.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      const dot = document.createElement('span');
+      dot.className = 'tag-chip-dot';
+      dot.style.background = t.color;
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(t.label));
+      chip.addEventListener('click', function () {
+        toggleEditingTag(t.id);
+      });
+      el.tagChips.appendChild(chip);
+    }
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'tag-chip tag-chip-add';
+    addBtn.textContent = '+ Tag';
+    addBtn.addEventListener('click', showNewTagForm);
+    el.tagChips.appendChild(addBtn);
+  }
+
+  function toggleEditingTag(id) {
+    const idx = editingTagIds.indexOf(id);
+    if (idx === -1) editingTagIds.push(id);
+    else editingTagIds.splice(idx, 1);
+    renderTagChips();
+  }
+
+  function showNewTagForm() {
+    el.newTagForm.classList.remove('hidden');
+    el.newTagLabel.value = '';
+    el.newTagColor.value = pickNextDefaultColor();
+    el.newTagLabel.focus();
+  }
+
+  function hideNewTagForm() {
+    el.newTagForm.classList.add('hidden');
+  }
+
+  /** Cycle through a palette so new tags don't all come out as the same blue. */
+  function pickNextDefaultColor() {
+    const palette = ['#3498db', '#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+    const used = new Set(submission.tags.map(function (t) { return t.color.toLowerCase(); }));
+    for (const c of palette) if (!used.has(c.toLowerCase())) return c;
+    return palette[submission.tags.length % palette.length];
+  }
+
+  function createTagFromForm() {
+    const label = el.newTagLabel.value.trim();
+    if (!label) { el.newTagLabel.focus(); return; }
+    const color = el.newTagColor.value || '#3498db';
+    const tag = { id: uuid(), label: label, color: color };
+    submission.tags.push(tag);
+    submission.updatedAt = Date.now();
+    // Auto-select the newly-created tag on the annotation being edited.
+    if (!el.modalBackdrop.classList.contains('hidden')) {
+      editingTagIds.push(tag.id);
+    }
+    hideNewTagForm();
+    renderTagChips();
+    if (!el.tagModalBackdrop.classList.contains('hidden')) renderTagRows();
+  }
+
+  // ------------------------------------------------------------------
+  // Tag manager modal
+  // ------------------------------------------------------------------
+
+  function openTagManager() {
+    renderTagRows();
+    el.tagModalBackdrop.classList.remove('hidden');
+    // Focus the first label input so keyboard editing is immediate.
+    setTimeout(function () {
+      const first = el.tagRows.querySelector('.tag-label-input');
+      if (first) first.focus();
+    }, 0);
+  }
+
+  function closeTagManager() {
+    el.tagModalBackdrop.classList.add('hidden');
+    // Re-render anything that depends on tags since we may have renamed /
+    // recoloured / deleted tags.
+    renderCodeView();
+    renderAnnotationList();
+    if (!el.modalBackdrop.classList.contains('hidden')) {
+      // Drop any editingTagIds that no longer exist.
+      editingTagIds = editingTagIds.filter(function (id) { return !!getTagById(id); });
+      renderTagChips();
+    }
+  }
+
+  function renderTagRows() {
+    el.tagRows.innerHTML = '';
+    for (const t of submission.tags) el.tagRows.appendChild(buildTagRow(t));
+  }
+
+  function buildTagRow(tag) {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.dataset.tagId = tag.id;
+
+    const swatch = document.createElement('input');
+    swatch.type = 'color';
+    swatch.className = 'tag-swatch';
+    swatch.value = tag.color;
+    swatch.setAttribute('aria-label', 'Color for ' + tag.label);
+    swatch.addEventListener('input', function () {
+      tag.color = swatch.value;
+      submission.updatedAt = Date.now();
+    });
+    row.appendChild(swatch);
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'tag-label-input';
+    labelInput.value = tag.label;
+    labelInput.maxLength = 40;
+    labelInput.setAttribute('aria-label', 'Tag name');
+    labelInput.addEventListener('input', function () {
+      tag.label = labelInput.value;
+      submission.updatedAt = Date.now();
+    });
+    row.appendChild(labelInput);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'tag-delete';
+    del.title = 'Delete tag';
+    del.setAttribute('aria-label', 'Delete tag ' + tag.label);
+    del.textContent = '×';
+    del.addEventListener('click', function () { deleteTag(tag.id); });
+    row.appendChild(del);
+    return row;
+  }
+
+  function deleteTag(id) {
+    const usage = submission.annotations.reduce(function (acc, a) {
+      return acc + ((a.tagIds || []).indexOf(id) !== -1 ? 1 : 0);
+    }, 0);
+    if (usage > 0) {
+      const msg = 'This tag is applied to ' + usage +
+        (usage === 1 ? ' annotation' : ' annotations') +
+        '. Remove it from all of them and delete the tag?';
+      if (!window.confirm(msg)) return;
+    }
+    submission.tags = submission.tags.filter(function (t) { return t.id !== id; });
+    for (const a of submission.annotations) {
+      if (!a.tagIds) continue;
+      a.tagIds = a.tagIds.filter(function (tid) { return tid !== id; });
+    }
+    submission.updatedAt = Date.now();
+    renderTagRows();
+  }
+
+  function addNewTagRow() {
+    const tag = { id: uuid(), label: 'New tag', color: pickNextDefaultColor() };
+    submission.tags.push(tag);
+    submission.updatedAt = Date.now();
+    renderTagRows();
+    // Focus and select the label of the newly-added row so it's immediately
+    // rename-ready.
+    const row = el.tagRows.querySelector('[data-tag-id="' + cssEscape(tag.id) + '"] .tag-label-input');
+    if (row) { row.focus(); row.select(); }
+  }
+
+  // ------------------------------------------------------------------
   // Sidebar annotation list
   // ------------------------------------------------------------------
 
@@ -976,6 +1234,21 @@
     const spacer = document.createElement('span');
     spacer.className = 'annotation-head-spacer';
     head.appendChild(spacer);
+
+    if (a.tagIds && a.tagIds.length > 0) {
+      const pills = document.createElement('span');
+      pills.className = 'annotation-tags';
+      for (const id of a.tagIds) {
+        const t = getTagById(id);
+        if (!t) continue;
+        const pill = document.createElement('span');
+        pill.className = 'tag-pill tag-pill-sm';
+        pill.style.setProperty('--tag-color', t.color);
+        pill.textContent = t.label;
+        pills.appendChild(pill);
+      }
+      if (pills.children.length > 0) head.appendChild(pills);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'annotation-actions';
@@ -1164,8 +1437,16 @@
     el.btnAddComment.addEventListener('click', addCommentBlock);
     el.btnDeleteAnnotation.addEventListener('click', deleteEditingAnnotation);
 
+    el.newTagCreate.addEventListener('click', createTagFromForm);
+    el.newTagCancel.addEventListener('click', hideNewTagForm);
+    el.newTagLabel.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); createTagFromForm(); }
+      else if (e.key === 'Escape') { e.preventDefault(); hideNewTagForm(); }
+    });
+
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        if (!el.tagModalBackdrop.classList.contains('hidden')) { closeTagManager(); return; }
         if (!el.modalBackdrop.classList.contains('hidden')) closeCommentModal();
         if (!el.tooltip.classList.contains('hidden')) closeTooltip();
         hideCommentButton();
@@ -1192,6 +1473,12 @@
       const ok = window.confirm('Start a new submission? This clears everything.');
       if (!ok) return;
       resetEverything();
+    });
+    el.btnTags.addEventListener('click', openTagManager);
+    el.tagModalClose.addEventListener('click', closeTagManager);
+    el.btnAddTagRow.addEventListener('click', addNewTagRow);
+    el.tagModalBackdrop.addEventListener('click', function (e) {
+      if (e.target === el.tagModalBackdrop) closeTagManager();
     });
   }
 
