@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ASSIGNMENT_NAME}} — {{STUDENT_NAME}}</title>
+  <style>
+    /* highlight.js theme CSS inlined here */
+{{THEME_STYLES}}
+
+    /* All viewer CSS inlined here */
+{{STYLES}}
+  </style>
+</head>
+<body>
+  <header class="redpen-header">
+    <div class="meta">
+      <h1 class="assignment">{{ASSIGNMENT_NAME}}</h1>
+      <p class="student">{{STUDENT_NAME}}</p>
+    </div>
+    {{SCORE_BLOCK}}
+  </header>
+
+  {{OVERALL_COMMENT}}
+
+  <main class="code-view">
+    <pre class="code-pre"><code class="code-lines hljs">{{CODE_BODY}}</code></pre>
+  </main>
+
+  <!-- Footnotes for print mode -->
+  <div class="print-annotations hidden-screen" id="print-annotations">
+    {{PRINT_ANNOTATIONS}}
+  </div>
+
+  <div class="tooltip" id="tooltip" hidden>
+    <span class="tooltip-arrow" aria-hidden="true"></span>
+    <div id="tooltip-content" class="tooltip-content"></div>
+  </div>
+
+  <script type="application/json" id="submission-data">
+    {{DATA}}
+  </script>
+
+  <script>
+    /* All viewer JS inlined here */
+{{HIGHLIGHT_JS}}
+
+{{VIEWER_RUNTIME_JS}}
+  </script>
+</body>
+</html>

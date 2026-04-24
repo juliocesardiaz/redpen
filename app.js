@@ -66,6 +66,8 @@
     scoreTotal: document.getElementById('score-total'),
     btnTags: document.getElementById('btn-tags'),
     btnExport: document.getElementById('btn-export'),
+    // Enable export button since it's now implemented
+    initExportButton: function() { const btn = document.getElementById('btn-export'); if(btn) { btn.disabled = false; btn.removeAttribute('title'); } },
     btnNew: document.getElementById('btn-new'),
     codeEmpty: document.getElementById('code-empty'),
     codeInput: document.getElementById('code-input'),
@@ -152,7 +154,7 @@
       html = window.hljs.highlight(source, { language: hlLang, ignoreIllegals: true }).value;
     } catch (_) {
       // Fall back to escaped plain text if the language is unknown.
-      html = escapeHtml(source);
+      html = window.RedpenShared.escapeHtml(source);
     }
     return splitHighlightedByLines(html);
   }
@@ -199,19 +201,6 @@
     for (let j = openStack.length - 1; j >= 0; j--) current += '</span>';
     lines.push(current);
     return lines;
-  }
-
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, function (c) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-    });
-  }
-
-  // Tighter escape for attribute values built via string concatenation.
-  function escapeAttr(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-    });
   }
 
   function renderCodeView() {
@@ -265,7 +254,7 @@
       for (const w of wraps) {
         const a = w.annotation;
         const tag = primaryTagForAnnotation(a);
-        const style = tag ? ' style="--hl:' + escapeAttr(tag.color) + '"' : '';
+        const style = tag ? ' style="--hl:' + window.RedpenShared.escapeAttr(tag.color) + '"' : '';
         const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '"' + style + '>';
         lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
       }
@@ -899,7 +888,7 @@
     if (!text || !text.trim()) {
       return '<p class="empty-hint">Nothing to preview yet.</p>';
     }
-    return renderMarkdown(text);
+    return window.RedpenShared.renderMarkdown(text);
   }
 
   function updateBlockPreview(index) {
@@ -1127,7 +1116,7 @@
       }
       const body = document.createElement('div');
       body.className = 'tooltip-comment markdown-body';
-      body.innerHTML = renderMarkdown(annotation.comments[i].text);
+      body.innerHTML = window.RedpenShared.renderMarkdown(annotation.comments[i].text);
       el.tooltipContent.appendChild(body);
     }
   }
@@ -1590,7 +1579,7 @@
       el.overallPreview.innerHTML = '<p class="empty-hint">Nothing to preview yet.</p>';
       return;
     }
-    el.overallPreview.innerHTML = renderMarkdown(src);
+    el.overallPreview.innerHTML = window.RedpenShared.renderMarkdown(src);
   }
 
   // ------------------------------------------------------------------
@@ -1619,102 +1608,12 @@
    * lists / paragraphs, apply inline rules, then restore placeholders last
    * so code contents are never touched by the inline pass.
    */
-  function renderMarkdown(source) {
-    if (!source) return '';
-    const fenced = [];
-    const inline = [];
-
-    // 1) Extract fenced code blocks from the raw (pre-escape) source so we can
-    //    hand their contents untouched to hljs.
-    let text = source.replace(/```([a-zA-Z0-9+_-]*)\n([\s\S]*?)```/g, function (_m, lang, code) {
-      fenced.push({ lang: (lang || '').toLowerCase(), code: code });
-      return '\x00F' + (fenced.length - 1) + '\x00';
-    });
-
-    // 2) Escape the remaining text before any further manipulation.
-    text = escapeHtml(text);
-
-    // 3) Extract inline code. Content is already escaped; we restore it as-is.
-    text = text.replace(/`([^`\n]+)`/g, function (_m, code) {
-      inline.push(code);
-      return '\x00I' + (inline.length - 1) + '\x00';
-    });
-
-    // 4) Block-level pass: group consecutive "- " lines into <ul>, treat
-    //    blank lines as paragraph separators.
-    const lines = text.split('\n');
-    const blocks = [];
-    let paragraphBuf = [];
-    let listBuf = [];
-    let inList = false;
-    function flushParagraph() {
-      if (paragraphBuf.length && paragraphBuf.join('').trim()) {
-        blocks.push({ type: 'p', content: paragraphBuf.join('\n') });
-      }
-      paragraphBuf = [];
-    }
-    function flushList() {
-      if (!inList) return;
-      blocks.push({ type: 'ul', items: listBuf });
-      listBuf = [];
-      inList = false;
-    }
-    for (let i = 0; i <= lines.length; i++) {
-      const line = i < lines.length ? lines[i] : null;
-      if (line === null || line === '') {
-        flushList();
-        flushParagraph();
-        continue;
-      }
-      // A standalone fence placeholder is a block-level element and must not
-      // be wrapped in <p> (invalid HTML — the browser would auto-close <p>
-      // at the opening <div>).
-      const fenceMatch = line.match(/^\s*\x00F(\d+)\x00\s*$/);
-      if (fenceMatch) {
-        flushList();
-        flushParagraph();
-        blocks.push({ type: 'fence', idx: Number(fenceMatch[1]) });
-        continue;
-      }
-      if (/^-\s+/.test(line)) {
-        if (!inList) { flushParagraph(); inList = true; }
-        listBuf.push(line.replace(/^-\s+/, ''));
-      } else {
-        if (inList) flushList();
-        paragraphBuf.push(line);
-      }
-    }
-
-    // 5) Apply inline rules (bold → italic → links) and emit block HTML.
-    let html = blocks.map(function (b) {
-      if (b.type === 'fence') return '\x00F' + b.idx + '\x00';
-      if (b.type === 'ul') {
-        return '<ul>' + b.items.map(function (it) {
-          return '<li>' + applyInline(it) + '</li>';
-        }).join('') + '</ul>';
-      }
-      return '<p>' + applyInline(b.content).replace(/\n/g, '<br>') + '</p>';
-    }).join('');
-
-    // 6) Restore inline code placeholders with <code>.
-    html = html.replace(/\x00I(\d+)\x00/g, function (_m, idx) {
-      return '<code class="md-inline-code">' + inline[Number(idx)] + '</code>';
-    });
-
-    // 7) Restore fenced code blocks with their full <pre><code> treatment.
-    html = html.replace(/\x00F(\d+)\x00/g, function (_m, idx) {
-      return renderFencedBlock(fenced[Number(idx)]);
-    });
-
-    return html;
-  }
-
   function applyInline(s) {
     // Bold before italic so **word** isn't partially consumed by * rules.
     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
     s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function (_m, label, url) {
-      return '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener">' + label + '</a>';
+      return '<a href="' + window.RedpenShared.escapeAttr(url) + '" target="_blank" rel="noopener">' + label + '</a>';
     });
     return s;
   }
@@ -1731,12 +1630,12 @@
         content = window.hljs.highlight(block.code, { language: hljsLang, ignoreIllegals: true }).value;
         codeClass = ' class="hljs language-' + hljsLang + '"';
       } catch (_) {
-        content = escapeHtml(block.code);
+        content = window.RedpenShared.escapeHtml(block.code);
       }
     } else {
-      content = escapeHtml(block.code);
+      content = window.RedpenShared.escapeHtml(block.code);
     }
-    const label = lang ? '<span class="md-code-lang">' + escapeHtml(lang) + '</span>' : '';
+    const label = lang ? '<span class="md-code-lang">' + window.RedpenShared.escapeHtml(lang) + '</span>' : '';
     // Copy button reads the raw text from the <code> element at click time,
     // so we don't need to round-trip the source through an attribute.
     const copy = '<button type="button" class="md-code-copy" data-md-copy title="Copy code"><span class="md-copy-label">Copy</span></button>';
@@ -1958,6 +1857,13 @@
       resetEverything();
     });
     el.btnTags.addEventListener('click', openTagManager);
+    el.btnExport.addEventListener('click', function() {
+      if (!submission.studentName || !submission.studentName.trim() || !submission.assignmentName || !submission.assignmentName.trim()) {
+        alert('Add a student name and assignment name before exporting');
+        return;
+      }
+      if (window.exportSubmission) window.exportSubmission(submission);
+    });
     el.tagModalClose.addEventListener('click', closeTagManager);
     el.btnAddTagRow.addEventListener('click', addNewTagRow);
     el.tagModalBackdrop.addEventListener('click', function (e) {
@@ -1997,6 +1903,7 @@
     wireTooltip();
     wireCopyButton();
     wireTopbar();
+    el.initExportButton();
     renderAnnotationList();
     showEmptyView();
   }
