@@ -95,7 +95,8 @@
           let commentsHtml = '';
           if (a.comments && a.comments.length > 0) {
             a.comments.forEach(c => {
-               commentsHtml += `<div class="markdown-body">${window.RedpenShared.renderMarkdown(c)}</div>`;
+               const text = typeof c === 'string' ? c : (c && c.text) || '';
+               commentsHtml += `<div class="markdown-body">${window.RedpenShared.renderMarkdown(text)}</div>`;
             });
           }
 
