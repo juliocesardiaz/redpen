@@ -129,9 +129,17 @@
             <button id="new-tag-cancel" class="btn btn-small" type="button">Cancel</button>
           </div>
         </div>
-        <div id="comment-blocks" class="comment-blocks"></div>
+        <div class="modal-view-toggle-row">
+          <p class="modal-hint modal-hint-inline">Supports markdown. Use <code>```python</code> for code blocks, <code>```diff</code> for change suggestions.</p>
+          <div class="view-toggle" role="tablist" aria-label="Comment editor view">
+            <button type="button" class="view-toggle-btn selected" data-modal-view="edit" role="tab" aria-selected="true">Edit</button>
+            <button type="button" class="view-toggle-btn" data-modal-view="preview" role="tab" aria-selected="false">Preview</button>
+            <button type="button" class="view-toggle-btn" data-modal-view="split" role="tab" aria-selected="false">Split</button>
+          </div>
+        </div>
+        <div id="comment-blocks" class="comment-blocks" data-view="edit"></div>
         <button id="btn-add-comment" class="btn-ghost" type="button">+ Add another comment</button>
-        <p class="modal-hint">Tab indents. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel.</p>
+        <p class="modal-hint">Tab indents. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>E</kbd> toggles preview.</p>
       </div>
       <footer class="modal-footer">
         <button id="btn-delete-annotation" class="btn btn-danger hidden" type="button">Delete annotation</button>
@@ -142,11 +150,14 @@
     </div>
   </div>
 
-  <!-- highlight.js: try CDN first, fall back to vendored copy if it fails to load. -->
+  <!-- highlight.js: try CDN first, fall back to vendored copy if it fails to load.
+       After hljs itself is up, load the diff grammar (not in the common bundle)
+       from the vendored copy so ```diff code blocks colour + / - lines. -->
   <script>
     (function loadHighlightJS() {
       var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
       var FALLBACK = 'vendor/highlight.min.js';
+      var DIFF = 'vendor/highlight-diff.min.js';
       function inject(src, onload, onerror) {
         var s = document.createElement('script');
         s.src = src;
@@ -155,9 +166,15 @@
         s.onerror = onerror;
         document.head.appendChild(s);
       }
-      inject(CDN, bootApp, function () { inject(FALLBACK, bootApp, function () {
+      inject(CDN, afterMain, function () { inject(FALLBACK, afterMain, function () {
         document.body.innerHTML = '<p style="padding:2rem;font-family:system-ui">Failed to load highlight.js — check your network or the vendor/ folder.</p>';
       }); });
+      function afterMain() {
+        // Register the diff language from the vendored file. Proceed regardless
+        // of outcome so a missing grammar only means diff code blocks fall back
+        // to plain monospace.
+        inject(DIFF, bootApp, bootApp);
+      }
       function bootApp() {
         var s = document.createElement('script');
         s.src = 'app.js';
