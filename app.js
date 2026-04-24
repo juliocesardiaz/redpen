@@ -1,7 +1,7 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 6 (metadata polish + overall preview).
- * Later steps will extend with markdown, export, viewer polish.
+ * Build order: currently at Step 7 (markdown rendering + code blocks).
+ * Later steps will extend with export and viewer polish.
  */
 
 (function () {
@@ -612,6 +612,7 @@
     setSelectedType(suggested);
     el.btnDeleteAnnotation.classList.add('hidden');
     hideNewTagForm();
+    setModalView('edit');
     renderTagChips();
     renderCommentBlocks();
     el.modalBackdrop.classList.remove('hidden');
@@ -634,6 +635,7 @@
     setSelectedType(a.type);
     el.btnDeleteAnnotation.classList.remove('hidden');
     hideNewTagForm();
+    setModalView('edit');
     renderTagChips();
     renderCommentBlocks();
     el.modalBackdrop.classList.remove('hidden');
@@ -690,13 +692,22 @@
     ta.spellcheck = false;
     ta.setAttribute('autocomplete', 'off');
     ta.placeholder = index === 0
-      ? 'Write a comment (plain text for now; markdown arrives in step 7)'
+      ? 'Write a comment. Markdown supported — ```lang for code, - for lists.'
       : 'Additional comment…';
     ta.addEventListener('input', function () {
       editingBlocks[index].text = ta.value;
+      if (modalView !== 'edit') updateBlockPreview(index);
     });
     ta.addEventListener('keydown', handleModalTextareaKey);
     row.appendChild(ta);
+
+    // Preview pane rendered alongside/instead of the textarea depending on
+    // the modal view mode. CSS shows/hides via the container's data-view.
+    const preview = document.createElement('div');
+    preview.className = 'comment-block-preview markdown-body';
+    preview.dataset.blockIndex = String(index);
+    preview.innerHTML = renderOrEmpty(block.text);
+    row.appendChild(preview);
 
     // The remove button is only meaningful when there is more than one block;
     // removing the last block via × would leave an annotation with no comment,
@@ -718,6 +729,36 @@
     return row;
   }
 
+  function renderOrEmpty(text) {
+    if (!text || !text.trim()) {
+      return '<p class="empty-hint">Nothing to preview yet.</p>';
+    }
+    return renderMarkdown(text);
+  }
+
+  function updateBlockPreview(index) {
+    const preview = el.commentBlocks.querySelector(
+      '.comment-block-preview[data-block-index="' + index + '"]'
+    );
+    if (!preview) return;
+    preview.innerHTML = renderOrEmpty(editingBlocks[index].text);
+  }
+
+  let modalView = 'edit';
+
+  function setModalView(view) {
+    modalView = view === 'preview' || view === 'split' ? view : 'edit';
+    el.commentBlocks.dataset.view = modalView;
+    document.querySelectorAll('[data-modal-view]').forEach(function (b) {
+      const active = b.dataset.modalView === modalView;
+      b.classList.toggle('selected', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (modalView !== 'edit') {
+      for (let i = 0; i < editingBlocks.length; i++) updateBlockPreview(i);
+    }
+  }
+
   function addCommentBlock() {
     editingBlocks.push(blankBlock());
     renderCommentBlocks();
@@ -733,6 +774,10 @@
     } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       saveCommentModal();
+    } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      // Cycle edit → preview → edit. Split remains an explicit button choice.
+      setModalView(modalView === 'edit' ? 'preview' : 'edit');
     }
   }
 
@@ -890,8 +935,6 @@
   }
 
   function renderTooltipContent(annotation) {
-    // Step 5: tag pills + plain-text comments. Step 7 swaps plain text for
-    // rendered markdown.
     el.tooltipContent.innerHTML = '';
     if (annotation.tagIds && annotation.tagIds.length > 0) {
       const row = document.createElement('div');
@@ -914,8 +957,8 @@
         el.tooltipContent.appendChild(hr);
       }
       const body = document.createElement('div');
-      body.className = 'tooltip-comment';
-      body.textContent = annotation.comments[i].text;
+      body.className = 'tooltip-comment markdown-body';
+      body.innerHTML = renderMarkdown(annotation.comments[i].text);
       el.tooltipContent.appendChild(body);
     }
   }
@@ -1381,19 +1424,155 @@
     el.overallPreview.innerHTML = renderMarkdown(src);
   }
 
+  // ------------------------------------------------------------------
+  // Markdown renderer (spec's supported subset, no library)
+  // ------------------------------------------------------------------
+
+  // Aliases map user-written fence languages onto hljs grammar names. Any
+  // language not listed falls back to plain monospace inside the <pre><code>.
+  const MD_LANG_ALIAS = {
+    python: 'python', py: 'python',
+    javascript: 'javascript', js: 'javascript',
+    html: 'xml', xml: 'xml',
+    css: 'css',
+    diff: 'diff', patch: 'diff',
+  };
+
   /**
-   * Markdown renderer. Step 6 ships a minimal placeholder: HTML-escape and
-   * preserve line breaks. Step 7 replaces this with the full supported
-   * subset (code fences, inline code, bold/italic, lists, links) and wires
-   * it through the tooltip content as well.
+   * Render a trusted-teacher-authored markdown string to HTML. Supported:
+   *   `code`               inline code
+   *   ```lang\n...\n```    fenced code block (syntax-highlighted when known)
+   *   **bold**
+   *   *italic*
+   *   - item (consecutive lines form one <ul>)
+   *   [label](url)
+   * Ordering matches the spec: extract fenced, extract inline, handle
+   * lists / paragraphs, apply inline rules, then restore placeholders last
+   * so code contents are never touched by the inline pass.
    */
   function renderMarkdown(source) {
-    const escaped = escapeHtml(source);
-    // Blank-line-separated paragraphs with <br> for soft breaks.
-    const paragraphs = escaped.split(/\n{2,}/);
-    return paragraphs
-      .map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; })
-      .join('');
+    if (!source) return '';
+    const fenced = [];
+    const inline = [];
+
+    // 1) Extract fenced code blocks from the raw (pre-escape) source so we can
+    //    hand their contents untouched to hljs.
+    let text = source.replace(/```([a-zA-Z0-9+_-]*)\n([\s\S]*?)```/g, function (_m, lang, code) {
+      fenced.push({ lang: (lang || '').toLowerCase(), code: code });
+      return '\x00F' + (fenced.length - 1) + '\x00';
+    });
+
+    // 2) Escape the remaining text before any further manipulation.
+    text = escapeHtml(text);
+
+    // 3) Extract inline code. Content is already escaped; we restore it as-is.
+    text = text.replace(/`([^`\n]+)`/g, function (_m, code) {
+      inline.push(code);
+      return '\x00I' + (inline.length - 1) + '\x00';
+    });
+
+    // 4) Block-level pass: group consecutive "- " lines into <ul>, treat
+    //    blank lines as paragraph separators.
+    const lines = text.split('\n');
+    const blocks = [];
+    let paragraphBuf = [];
+    let listBuf = [];
+    let inList = false;
+    function flushParagraph() {
+      if (paragraphBuf.length && paragraphBuf.join('').trim()) {
+        blocks.push({ type: 'p', content: paragraphBuf.join('\n') });
+      }
+      paragraphBuf = [];
+    }
+    function flushList() {
+      if (!inList) return;
+      blocks.push({ type: 'ul', items: listBuf });
+      listBuf = [];
+      inList = false;
+    }
+    for (let i = 0; i <= lines.length; i++) {
+      const line = i < lines.length ? lines[i] : null;
+      if (line === null || line === '') {
+        flushList();
+        flushParagraph();
+        continue;
+      }
+      // A standalone fence placeholder is a block-level element and must not
+      // be wrapped in <p> (invalid HTML — the browser would auto-close <p>
+      // at the opening <div>).
+      const fenceMatch = line.match(/^\s*\x00F(\d+)\x00\s*$/);
+      if (fenceMatch) {
+        flushList();
+        flushParagraph();
+        blocks.push({ type: 'fence', idx: Number(fenceMatch[1]) });
+        continue;
+      }
+      if (/^-\s+/.test(line)) {
+        if (!inList) { flushParagraph(); inList = true; }
+        listBuf.push(line.replace(/^-\s+/, ''));
+      } else {
+        if (inList) flushList();
+        paragraphBuf.push(line);
+      }
+    }
+
+    // 5) Apply inline rules (bold → italic → links) and emit block HTML.
+    let html = blocks.map(function (b) {
+      if (b.type === 'fence') return '\x00F' + b.idx + '\x00';
+      if (b.type === 'ul') {
+        return '<ul>' + b.items.map(function (it) {
+          return '<li>' + applyInline(it) + '</li>';
+        }).join('') + '</ul>';
+      }
+      return '<p>' + applyInline(b.content).replace(/\n/g, '<br>') + '</p>';
+    }).join('');
+
+    // 6) Restore inline code placeholders with <code>.
+    html = html.replace(/\x00I(\d+)\x00/g, function (_m, idx) {
+      return '<code class="md-inline-code">' + inline[Number(idx)] + '</code>';
+    });
+
+    // 7) Restore fenced code blocks with their full <pre><code> treatment.
+    html = html.replace(/\x00F(\d+)\x00/g, function (_m, idx) {
+      return renderFencedBlock(fenced[Number(idx)]);
+    });
+
+    return html;
+  }
+
+  function applyInline(s) {
+    // Bold before italic so **word** isn't partially consumed by * rules.
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function (_m, label, url) {
+      return '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener">' + label + '</a>';
+    });
+    return s;
+  }
+
+  function renderFencedBlock(block) {
+    const lang = block.lang || '';
+    const hljsLang = MD_LANG_ALIAS[lang];
+    let content;
+    let codeClass = '';
+    const hasGrammar = hljsLang && window.hljs &&
+      (window.hljs.getLanguage ? !!window.hljs.getLanguage(hljsLang) : true);
+    if (hasGrammar) {
+      try {
+        content = window.hljs.highlight(block.code, { language: hljsLang, ignoreIllegals: true }).value;
+        codeClass = ' class="hljs language-' + hljsLang + '"';
+      } catch (_) {
+        content = escapeHtml(block.code);
+      }
+    } else {
+      content = escapeHtml(block.code);
+    }
+    const label = lang ? '<span class="md-code-lang">' + escapeHtml(lang) + '</span>' : '';
+    // Copy button reads the raw text from the <code> element at click time,
+    // so we don't need to round-trip the source through an attribute.
+    const copy = '<button type="button" class="md-code-copy" data-md-copy title="Copy code"><span class="md-copy-label">Copy</span></button>';
+    return '<div class="md-code-wrap">' + label + copy +
+      '<pre class="md-code-pre"><code' + codeClass + '>' + content + '</code></pre></div>';
   }
 
   // ------------------------------------------------------------------
@@ -1415,6 +1594,46 @@
     });
 
     el.btnEditCode.addEventListener('click', returnToEdit);
+  }
+
+  function wireCopyButton() {
+    // Delegated handler covers every rendered code block (tooltip, overall
+    // preview, comment modal preview). Reads the raw text from the <code>
+    // element so syntax-highlighting markup doesn't pollute the clipboard.
+    document.addEventListener('click', function (e) {
+      const btn = e.target && e.target.closest && e.target.closest('[data-md-copy]');
+      if (!btn) return;
+      e.stopPropagation();
+      const wrap = btn.closest('.md-code-wrap');
+      if (!wrap) return;
+      const codeEl = wrap.querySelector('pre code');
+      if (!codeEl) return;
+      const text = codeEl.innerText;
+      const label = btn.querySelector('.md-copy-label');
+      function flash(msg) {
+        if (!label) return;
+        const prev = label.textContent;
+        label.textContent = msg;
+        setTimeout(function () { label.textContent = prev; }, 1200);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { flash('Copied'); },
+          function () { flash('Failed'); }
+        );
+      } else {
+        // Legacy fallback for browsers without the async clipboard API.
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); flash('Copied'); }
+        catch (_) { flash('Failed'); }
+        document.body.removeChild(ta);
+      }
+    });
   }
 
   function wireTooltip() {
@@ -1525,6 +1744,10 @@
       if (e.target && e.target.name === 'annotation-type') setSelectedType(e.target.value);
     });
 
+    document.querySelectorAll('[data-modal-view]').forEach(function (btn) {
+      btn.addEventListener('click', function () { setModalView(btn.dataset.modalView); });
+    });
+
     el.btnAddComment.addEventListener('click', addCommentBlock);
     el.btnDeleteAnnotation.addEventListener('click', deleteEditingAnnotation);
 
@@ -1603,6 +1826,7 @@
     wireCodeInput();
     wireSelectionAndModal();
     wireTooltip();
+    wireCopyButton();
     wireTopbar();
     renderAnnotationList();
     showEmptyView();
