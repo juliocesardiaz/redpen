@@ -1,6 +1,6 @@
 /* redpen — author mode logic
  *
- * Build order: currently at Step 3b (annotation types + tooltip).
+ * Build order: currently at Step 4 (multi-comment annotations + edit/delete).
  * Later steps will extend with tags, markdown, export.
  */
 
@@ -68,11 +68,14 @@
     commentBtn: document.getElementById('comment-btn'),
     modalBackdrop: document.getElementById('modal-backdrop'),
     modal: document.getElementById('comment-modal'),
+    modalTitle: document.getElementById('modal-title'),
     modalRange: document.getElementById('modal-range'),
-    modalTextarea: document.getElementById('modal-textarea'),
     modalSave: document.getElementById('modal-save'),
     modalCancel: document.getElementById('modal-cancel'),
     typeSelector: document.getElementById('type-selector'),
+    commentBlocks: document.getElementById('comment-blocks'),
+    btnAddComment: document.getElementById('btn-add-comment'),
+    btnDeleteAnnotation: document.getElementById('btn-delete-annotation'),
     tooltip: document.getElementById('tooltip'),
     tooltipContent: document.getElementById('tooltip-content'),
   };
@@ -89,6 +92,14 @@
   // Range locked into the open comment modal. Decoupled from selectionRange
   // because focusing the modal textarea collapses the code-view selection.
   let editingRange = null;
+
+  // When editing an existing annotation, holds its id. Null in "new" mode.
+  let editingAnnotationId = null;
+
+  // Draft copy of the comment list being edited. Each block is
+  // { id: string|null, text: string, createdAt: number|null }. id/createdAt
+  // are null for newly-added-but-not-yet-saved comments.
+  let editingBlocks = [];
 
   // ------------------------------------------------------------------
   // Highlight.js configuration
@@ -548,17 +559,48 @@
 
   function openCommentModal(range) {
     if (!range) return;
+    editingAnnotationId = null;
     editingRange = range;
+    editingBlocks = [blankBlock()];
+    el.modalTitle.textContent = 'Add comment';
     el.modalRange.textContent = formatRangeLabel(range);
-    el.modalTextarea.value = '';
     // Auto-suggest the type: single line → span, multi-line → line range.
     // Block is always manual — the teacher opts into it when they want the
     // left-border treatment for a structured region.
     const suggested = range.startLine === range.endLine ? 'span' : 'line-range';
     setSelectedType(suggested);
+    el.btnDeleteAnnotation.classList.add('hidden');
+    renderCommentBlocks();
     el.modalBackdrop.classList.remove('hidden');
-    // Delay focus so the transition plays and the textarea actually receives it.
-    setTimeout(function () { el.modalTextarea.focus(); }, 0);
+    setTimeout(function () { focusFirstBlockTextarea(); }, 0);
+  }
+
+  function openCommentModalForEdit(annotationId) {
+    const a = getAnnotationById(annotationId);
+    if (!a) return;
+    closeTooltip();
+    editingAnnotationId = a.id;
+    editingRange = Object.assign({}, a.range);
+    editingBlocks = a.comments.map(function (c) {
+      return { id: c.id, text: c.text, createdAt: c.createdAt };
+    });
+    if (editingBlocks.length === 0) editingBlocks = [blankBlock()];
+    el.modalTitle.textContent = 'Edit annotation';
+    el.modalRange.textContent = formatRangeLabel(a.range);
+    setSelectedType(a.type);
+    el.btnDeleteAnnotation.classList.remove('hidden');
+    renderCommentBlocks();
+    el.modalBackdrop.classList.remove('hidden');
+    setTimeout(function () { focusFirstBlockTextarea(); }, 0);
+  }
+
+  function blankBlock() {
+    return { id: null, text: '', createdAt: null };
+  }
+
+  function focusFirstBlockTextarea() {
+    const ta = el.commentBlocks.querySelector('textarea');
+    if (ta) ta.focus();
   }
 
   function setSelectedType(type) {
@@ -577,38 +619,159 @@
   function closeCommentModal() {
     el.modalBackdrop.classList.add('hidden');
     editingRange = null;
+    editingAnnotationId = null;
+    editingBlocks = [];
+  }
+
+  function renderCommentBlocks() {
+    el.commentBlocks.innerHTML = '';
+    for (let i = 0; i < editingBlocks.length; i++) {
+      el.commentBlocks.appendChild(buildCommentBlock(i));
+    }
+  }
+
+  function buildCommentBlock(index) {
+    const block = editingBlocks[index];
+    const row = document.createElement('div');
+    row.className = 'comment-block';
+    if (block.id) row.dataset.commentId = block.id;
+
+    const ta = document.createElement('textarea');
+    ta.className = 'comment-block-textarea';
+    ta.value = block.text;
+    ta.spellcheck = false;
+    ta.setAttribute('autocomplete', 'off');
+    ta.placeholder = index === 0
+      ? 'Write a comment (plain text for now; markdown arrives in step 7)'
+      : 'Additional comment…';
+    ta.addEventListener('input', function () {
+      editingBlocks[index].text = ta.value;
+    });
+    ta.addEventListener('keydown', handleModalTextareaKey);
+    row.appendChild(ta);
+
+    // The remove button is only meaningful when there is more than one block;
+    // removing the last block via × would leave an annotation with no comment,
+    // so we hide it in that case and let "Delete annotation" handle it.
+    if (editingBlocks.length > 1) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'comment-block-delete';
+      del.title = 'Remove this comment';
+      del.setAttribute('aria-label', 'Remove this comment');
+      del.textContent = '×';
+      del.addEventListener('click', function () {
+        editingBlocks.splice(index, 1);
+        renderCommentBlocks();
+        focusFirstBlockTextarea();
+      });
+      row.appendChild(del);
+    }
+    return row;
+  }
+
+  function addCommentBlock() {
+    editingBlocks.push(blankBlock());
+    renderCommentBlocks();
+    const all = el.commentBlocks.querySelectorAll('textarea');
+    const last = all[all.length - 1];
+    if (last) last.focus();
+  }
+
+  function handleModalTextareaKey(e) {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      insertAtCursor(e.currentTarget, '  ');
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      saveCommentModal();
+    }
   }
 
   function saveCommentModal() {
-    const text = el.modalTextarea.value.trim();
-    if (!text) {
-      el.modalTextarea.focus();
+    // Collect non-empty blocks in order, preserving ids/createdAts where they
+    // already exist so the sidebar's "edit" round-trip doesn't churn metadata.
+    const now = Date.now();
+    const kept = [];
+    for (const b of editingBlocks) {
+      const text = b.text.trim();
+      if (!text) continue;
+      kept.push({
+        id: b.id || uuid(),
+        text: text,
+        createdAt: typeof b.createdAt === 'number' ? b.createdAt : now,
+      });
+    }
+    if (kept.length === 0) {
+      focusFirstBlockTextarea();
       return;
     }
-    if (!editingRange) { closeCommentModal(); return; }
-    const now = Date.now();
     const type = getSelectedType();
-    // Line-range and block are whole-line; they don't carry column offsets.
-    // Span keeps columns. This matches the data-model rule in the spec.
-    const range = { startLine: editingRange.startLine, endLine: editingRange.endLine };
-    if (type === 'span') {
-      range.startCol = editingRange.startCol;
-      range.endCol = editingRange.endCol;
+
+    if (editingAnnotationId === null) {
+      if (!editingRange) { closeCommentModal(); return; }
+      const range = { startLine: editingRange.startLine, endLine: editingRange.endLine };
+      if (type === 'span') {
+        range.startCol = editingRange.startCol;
+        range.endCol = editingRange.endCol;
+      }
+      submission.annotations.push({
+        id: uuid(),
+        type: type,
+        range: range,
+        comments: kept,
+        tagIds: [],
+      });
+    } else {
+      const a = getAnnotationById(editingAnnotationId);
+      if (!a) { closeCommentModal(); return; }
+      a.type = type;
+      if (type === 'span') {
+        // If switching to span from a whole-line type, default cols to the
+        // full first line so the highlight still visibly lands somewhere.
+        if (typeof a.range.startCol !== 'number') a.range.startCol = 0;
+        if (typeof a.range.endCol !== 'number') {
+          const ln = (sourceLines[a.range.startLine - 1] || '').length;
+          a.range.endCol = ln;
+        }
+      } else {
+        delete a.range.startCol;
+        delete a.range.endCol;
+      }
+      a.comments = kept;
     }
-    const annotation = {
-      id: uuid(),
-      type: type,
-      range: range,
-      comments: [{ id: uuid(), text: text, createdAt: now }],
-      tagIds: [],
-    };
-    submission.annotations.push(annotation);
+
     submission.updatedAt = now;
     closeCommentModal();
     closeTooltip();
     hideCommentButton();
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
+    renderCodeView();
+    renderAnnotationList();
+    updateToolbarStatus();
+  }
+
+  function deleteEditingAnnotation() {
+    if (editingAnnotationId === null) return;
+    const ok = window.confirm('Delete this annotation and all its comments?');
+    if (!ok) return;
+    const id = editingAnnotationId;
+    submission.annotations = submission.annotations.filter(function (a) { return a.id !== id; });
+    submission.updatedAt = Date.now();
+    closeCommentModal();
+    closeTooltip();
+    renderCodeView();
+    renderAnnotationList();
+    updateToolbarStatus();
+  }
+
+  function deleteAnnotationById(id) {
+    const ok = window.confirm('Delete this annotation?');
+    if (!ok) return;
+    submission.annotations = submission.annotations.filter(function (a) { return a.id !== id; });
+    submission.updatedAt = Date.now();
+    if (el.tooltip.dataset.annotationId === id) closeTooltip();
     renderCodeView();
     renderAnnotationList();
     updateToolbarStatus();
@@ -778,20 +941,78 @@
       if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
       return (a.range.startCol || 0) - (b.range.startCol || 0);
     });
-    for (const a of sorted) {
-      const firstText = a.comments[0] ? a.comments[0].text : '';
-      const preview = firstText.length > 80 ? firstText.substring(0, 80) + '…' : firstText;
-      const item = document.createElement('div');
-      item.className = 'annotation-item';
-      item.dataset.annotationId = a.id;
-      item.innerHTML =
-        '<div class="annotation-item-head"><span class="annotation-range">' +
-        escapeHtml(formatRangeLabel(a.range)) +
-        '</span><span class="annotation-type">' + a.type + '</span></div>' +
-        '<div class="annotation-preview">' + escapeHtml(preview) + '</div>';
-      item.addEventListener('click', function () { scrollToAnnotation(a.id); });
-      el.annotationList.appendChild(item);
+    for (const a of sorted) el.annotationList.appendChild(buildSidebarEntry(a));
+  }
+
+  function buildSidebarEntry(a) {
+    const firstText = a.comments[0] ? a.comments[0].text : '';
+    const preview = firstText.length > 80 ? firstText.substring(0, 80) + '…' : firstText;
+    const commentCount = a.comments.length;
+
+    const item = document.createElement('div');
+    item.className = 'annotation-item';
+    item.dataset.annotationId = a.id;
+
+    const head = document.createElement('div');
+    head.className = 'annotation-item-head';
+
+    const range = document.createElement('span');
+    range.className = 'annotation-range';
+    range.textContent = formatRangeLabel(a.range);
+    head.appendChild(range);
+
+    const typeEl = document.createElement('span');
+    typeEl.className = 'annotation-type';
+    typeEl.textContent = a.type;
+    head.appendChild(typeEl);
+
+    if (commentCount > 1) {
+      const count = document.createElement('span');
+      count.className = 'annotation-count';
+      count.textContent = commentCount + ' comments';
+      head.appendChild(count);
     }
+
+    const spacer = document.createElement('span');
+    spacer.className = 'annotation-head-spacer';
+    head.appendChild(spacer);
+
+    const actions = document.createElement('div');
+    actions.className = 'annotation-actions';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'annotation-action';
+    editBtn.title = 'Edit';
+    editBtn.setAttribute('aria-label', 'Edit annotation');
+    editBtn.innerHTML = '&#9998;'; // pencil ✎
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openCommentModalForEdit(a.id);
+    });
+    actions.appendChild(editBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'annotation-action annotation-action-danger';
+    delBtn.title = 'Delete';
+    delBtn.setAttribute('aria-label', 'Delete annotation');
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      deleteAnnotationById(a.id);
+    });
+    actions.appendChild(delBtn);
+
+    head.appendChild(actions);
+    item.appendChild(head);
+
+    const previewEl = document.createElement('div');
+    previewEl.className = 'annotation-preview';
+    previewEl.textContent = preview;
+    item.appendChild(previewEl);
+
+    item.addEventListener('click', function () { scrollToAnnotation(a.id); });
+    return item;
   }
 
   function scrollToAnnotation(id) {
@@ -940,16 +1161,8 @@
       if (e.target && e.target.name === 'annotation-type') setSelectedType(e.target.value);
     });
 
-    // Tab-to-indent inside the comment textarea. Shift+Tab dedents or escapes.
-    el.modalTextarea.addEventListener('keydown', function (e) {
-      if (e.key === 'Tab' && !e.shiftKey) {
-        e.preventDefault();
-        insertAtCursor(el.modalTextarea, '  ');
-      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        saveCommentModal();
-      }
-    });
+    el.btnAddComment.addEventListener('click', addCommentBlock);
+    el.btnDeleteAnnotation.addEventListener('click', deleteEditingAnnotation);
 
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {

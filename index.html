@@ -95,16 +95,13 @@
           <label class="type-option"><input type="radio" name="annotation-type" value="line-range" /><span>Line range</span></label>
           <label class="type-option"><input type="radio" name="annotation-type" value="block" /><span>Block</span></label>
         </div>
-        <textarea
-          id="modal-textarea"
-          class="modal-textarea"
-          placeholder="Write a comment (plain text for now; markdown support arrives in step 7)"
-          spellcheck="false"
-          autocomplete="off"
-        ></textarea>
+        <div id="comment-blocks" class="comment-blocks"></div>
+        <button id="btn-add-comment" class="btn-ghost" type="button">+ Add another comment</button>
         <p class="modal-hint">Tab indents. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel.</p>
       </div>
       <footer class="modal-footer">
+        <button id="btn-delete-annotation" class="btn btn-danger hidden" type="button">Delete annotation</button>
+        <span class="modal-footer-spacer"></span>
         <button id="modal-cancel" class="btn" type="button">Cancel</button>
         <button id="modal-save" class="btn btn-primary" type="button">Save</button>
       </footer>
