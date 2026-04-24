@@ -912,6 +912,99 @@ body {
   background: var(--bg-muted);
 }
 
+/* --- Diff suggestion section (UI-only; generates a ```diff fence) ---- */
+
+.diff-suggestion {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.comment-blocks[data-view="split"] .diff-suggestion { border-radius: 0; }
+
+.diff-toggle {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.diff-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border-strong);
+  border-style: solid;
+}
+.diff-suggestion.expanded .diff-toggle {
+  border-style: solid;
+  border-color: rgba(192, 57, 43, 0.35);
+  color: var(--danger);
+}
+.diff-suggestion.expanded .diff-toggle:hover {
+  background: rgba(192, 57, 43, 0.08);
+}
+
+.diff-panels {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diff-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.diff-field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.diff-field-textarea {
+  width: 100%;
+  min-height: 60px;
+  max-height: 30vh;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  outline: none;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  box-sizing: border-box;
+  white-space: pre;
+}
+.diff-field-textarea:focus {
+  border-color: color-mix(in srgb, var(--field-accent, var(--accent)) 70%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--field-accent, var(--accent)) 20%, transparent);
+}
+
+.diff-field-before {
+  --field-accent: #c0392b;
+}
+.diff-field-before .diff-field-textarea {
+  background: rgba(255, 0, 0, 0.06);
+}
+
+.diff-field-after {
+  --field-accent: #27ae60;
+}
+.diff-field-after .diff-field-textarea {
+  background: rgba(0, 180, 0, 0.06);
+}
+
 .comment-block-delete {
   position: absolute;
   top: 6px;

@@ -615,6 +615,7 @@
     setModalView('edit');
     renderTagChips();
     renderCommentBlocks();
+    updateSaveButton();
     el.modalBackdrop.classList.remove('hidden');
     setTimeout(function () { focusFirstBlockTextarea(); }, 0);
   }
@@ -626,7 +627,7 @@
     editingAnnotationId = a.id;
     editingRange = Object.assign({}, a.range);
     editingBlocks = a.comments.map(function (c) {
-      return { id: c.id, text: c.text, createdAt: c.createdAt };
+      return { id: c.id, text: c.text, createdAt: c.createdAt, diff: newDiffState() };
     });
     if (editingBlocks.length === 0) editingBlocks = [blankBlock()];
     editingTagIds = (a.tagIds || []).slice();
@@ -638,16 +639,23 @@
     setModalView('edit');
     renderTagChips();
     renderCommentBlocks();
+    updateSaveButton();
     el.modalBackdrop.classList.remove('hidden');
     setTimeout(function () { focusFirstBlockTextarea(); }, 0);
   }
 
   function blankBlock() {
-    return { id: null, text: '', createdAt: null };
+    return { id: null, text: '', createdAt: null, diff: newDiffState() };
+  }
+
+  function newDiffState() {
+    // UI-only draft state. Never persisted on the saved Comment — its output
+    // is concatenated into the comment's markdown `text` at save time.
+    return { expanded: false, before: '', after: '' };
   }
 
   function focusFirstBlockTextarea() {
-    const ta = el.commentBlocks.querySelector('textarea');
+    const ta = el.commentBlocks.querySelector('.comment-block-textarea');
     if (ta) ta.focus();
   }
 
@@ -697,6 +705,7 @@
     ta.addEventListener('input', function () {
       editingBlocks[index].text = ta.value;
       if (modalView !== 'edit') updateBlockPreview(index);
+      updateSaveButton();
     });
     ta.addEventListener('keydown', handleModalTextareaKey);
     row.appendChild(ta);
@@ -706,8 +715,10 @@
     const preview = document.createElement('div');
     preview.className = 'comment-block-preview markdown-body';
     preview.dataset.blockIndex = String(index);
-    preview.innerHTML = renderOrEmpty(block.text);
+    preview.innerHTML = renderOrEmpty(buildCommentFinalText(block));
     row.appendChild(preview);
+
+    row.appendChild(buildDiffSuggestion(index));
 
     // The remove button is only meaningful when there is more than one block;
     // removing the last block via × would leave an annotation with no comment,
@@ -723,10 +734,165 @@
         editingBlocks.splice(index, 1);
         renderCommentBlocks();
         focusFirstBlockTextarea();
+        updateSaveButton();
       });
       row.appendChild(del);
     }
     return row;
+  }
+
+  // --- Diff suggestion (UI-only; appends a ```diff fence to the comment) ---
+
+  function buildDiffSuggestion(index) {
+    const block = editingBlocks[index];
+    const section = document.createElement('div');
+    section.className = 'diff-suggestion';
+    section.dataset.blockIndex = String(index);
+    if (block.diff.expanded) section.classList.add('expanded');
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'diff-toggle';
+    toggle.textContent = block.diff.expanded ? '× Remove suggestion' : '+ Add code suggestion';
+    toggle.addEventListener('click', function () { toggleDiffSuggestion(index); });
+    section.appendChild(toggle);
+
+    if (!block.diff.expanded) return section;
+
+    const panels = document.createElement('div');
+    panels.className = 'diff-panels';
+
+    panels.appendChild(buildDiffField('Before', 'before', index, block.diff.before));
+    panels.appendChild(buildDiffField('After',  'after',  index, block.diff.after));
+
+    section.appendChild(panels);
+    return section;
+  }
+
+  function buildDiffField(labelText, which, index, value) {
+    const wrap = document.createElement('div');
+    wrap.className = 'diff-field diff-field-' + which;
+
+    const label = document.createElement('label');
+    label.className = 'diff-field-label';
+    label.textContent = labelText;
+    wrap.appendChild(label);
+
+    const ta = document.createElement('textarea');
+    ta.className = 'diff-field-textarea';
+    ta.spellcheck = false;
+    ta.setAttribute('autocomplete', 'off');
+    ta.value = value;
+    ta.addEventListener('input', function () {
+      editingBlocks[index].diff[which] = ta.value;
+      if (modalView !== 'edit') updateBlockPreview(index);
+      updateSaveButton();
+    });
+    ta.addEventListener('keydown', handleDiffFieldKey);
+    wrap.appendChild(ta);
+
+    label.htmlFor = ta.id = 'diff-' + which + '-' + index;
+    return wrap;
+  }
+
+  function toggleDiffSuggestion(index) {
+    const block = editingBlocks[index];
+    if (!block.diff.expanded) {
+      // First-expand: pre-fill Before from the annotation's source text using
+      // the currently-selected type so span shows the substring and
+      // line-range / block show the full affected lines.
+      block.diff.expanded = true;
+      block.diff.before = getAnnotationSourceText(editingRange, getSelectedType());
+      block.diff.after = '';
+    } else {
+      // Collapsing clears the fields (spec: "Treat as empty; collapsing
+      // clears the fields").
+      block.diff.expanded = false;
+      block.diff.before = '';
+      block.diff.after = '';
+    }
+    rerenderBlock(index);
+    if (block.diff.expanded) {
+      // Auto-focus the After field when the section first expands.
+      const after = el.commentBlocks.querySelector(
+        '.diff-suggestion[data-block-index="' + index + '"] .diff-field-after textarea'
+      );
+      if (after) after.focus();
+    }
+    if (modalView !== 'edit') updateBlockPreview(index);
+    updateSaveButton();
+  }
+
+  function rerenderBlock(index) {
+    const rows = el.commentBlocks.querySelectorAll('.comment-block');
+    if (!rows[index]) return;
+    const fresh = buildCommentBlock(index);
+    rows[index].replaceWith(fresh);
+  }
+
+  function handleDiffFieldKey(e) {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      // Per-spec: Tab inserts a literal tab char; Shift+Tab leaves the field
+      // normally (default browser behavior).
+      e.preventDefault();
+      insertAtCursor(e.currentTarget, '\t');
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      saveCommentModal();
+    } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      setModalView(modalView === 'edit' ? 'preview' : 'edit');
+    }
+  }
+
+  function getAnnotationSourceText(range, type) {
+    if (!range || !sourceLines.length) return '';
+    const start = Math.max(0, range.startLine - 1);
+    const end = Math.min(sourceLines.length - 1, range.endLine - 1);
+    if (type === 'span') {
+      if (start === end) {
+        const line = sourceLines[start] || '';
+        return line.substring(
+          typeof range.startCol === 'number' ? range.startCol : 0,
+          typeof range.endCol === 'number' ? range.endCol : line.length
+        );
+      }
+      // Multi-line span: start col → end of first line, full middle lines,
+      // start → endCol on last line.
+      const first = sourceLines[start] || '';
+      const last = sourceLines[end] || '';
+      const parts = [first.substring(typeof range.startCol === 'number' ? range.startCol : 0)];
+      for (let i = start + 1; i < end; i++) parts.push(sourceLines[i] || '');
+      parts.push(last.substring(0, typeof range.endCol === 'number' ? range.endCol : last.length));
+      return parts.join('\n');
+    }
+    // line-range / block: full affected lines, indentation preserved.
+    const lines = [];
+    for (let i = start; i <= end; i++) lines.push(sourceLines[i] || '');
+    return lines.join('\n');
+  }
+
+  /**
+   * Build the final markdown string for a block: textarea content plus an
+   * optional ```diff fence generated from the UI draft state. Spec rules:
+   * strip trailing newlines from each diff field, one blank line between
+   * body and fence when both exist, empty interior lines still get their
+   * prefix, Both empty → ignore the diff section entirely.
+   */
+  function buildCommentFinalText(block) {
+    const body = (block.text || '').replace(/\s+$/, '');
+    const before = block.diff && block.diff.expanded ? (block.diff.before || '').replace(/\n+$/, '') : '';
+    const after = block.diff && block.diff.expanded ? (block.diff.after || '').replace(/\n+$/, '') : '';
+    if (!block.diff || !block.diff.expanded || (!before && !after)) return body;
+    const beforeLines = before ? before.split('\n').map(function (l) { return '- ' + l; }) : [];
+    const afterLines = after ? after.split('\n').map(function (l) { return '+ ' + l; }) : [];
+    const fence = '```diff\n' + beforeLines.concat(afterLines).join('\n') + '\n```';
+    return body ? body + '\n\n' + fence : fence;
+  }
+
+  function updateSaveButton() {
+    const canSave = editingBlocks.some(function (b) { return !!buildCommentFinalText(b); });
+    el.modalSave.disabled = !canSave;
   }
 
   function renderOrEmpty(text) {
@@ -741,7 +907,7 @@
       '.comment-block-preview[data-block-index="' + index + '"]'
     );
     if (!preview) return;
-    preview.innerHTML = renderOrEmpty(editingBlocks[index].text);
+    preview.innerHTML = renderOrEmpty(buildCommentFinalText(editingBlocks[index]));
   }
 
   let modalView = 'edit';
@@ -762,9 +928,10 @@
   function addCommentBlock() {
     editingBlocks.push(blankBlock());
     renderCommentBlocks();
-    const all = el.commentBlocks.querySelectorAll('textarea');
+    const all = el.commentBlocks.querySelectorAll('.comment-block-textarea');
     const last = all[all.length - 1];
     if (last) last.focus();
+    updateSaveButton();
   }
 
   function handleModalTextareaKey(e) {
@@ -784,10 +951,12 @@
   function saveCommentModal() {
     // Collect non-empty blocks in order, preserving ids/createdAts where they
     // already exist so the sidebar's "edit" round-trip doesn't churn metadata.
+    // Each block's text is its textarea body plus an optional generated
+    // ```diff fence built from the UI-only diff-suggestion draft state.
     const now = Date.now();
     const kept = [];
     for (const b of editingBlocks) {
-      const text = b.text.trim();
+      const text = buildCommentFinalText(b);
       if (!text) continue;
       kept.push({
         id: b.id || uuid(),
