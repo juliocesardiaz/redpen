@@ -18,6 +18,10 @@
   // Same as author mode
   function renderMarkdown(source) {
     if (!source) return '';
+    if (typeof source !== 'string') {
+      if (source && typeof source.text === 'string') source = source.text;
+      else return '';
+    }
     const lines = source.split('\n');
     let out = '';
     let inList = false;
@@ -175,7 +179,9 @@
         }
         const body = document.createElement('div');
         body.className = 'tooltip-comment markdown-body';
-        body.innerHTML = renderMarkdown(a.comments[i]);
+        const c = a.comments[i];
+        const text = typeof c === 'string' ? c : (c && c.text) || '';
+        body.innerHTML = renderMarkdown(text);
         tooltipContent.appendChild(body);
       }
     }
