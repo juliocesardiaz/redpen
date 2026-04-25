@@ -24,7 +24,12 @@
       const hljsMain = A.hljsMain;
       const hljsDiff = A.hljsDiff;
 
-      let codeHtml = document.getElementById('code-lines') ? document.getElementById('code-lines').innerHTML : '';
+      const codeLinesEl = document.getElementById('code-lines');
+      let codeHtml = codeLinesEl ? codeLinesEl.innerHTML : '';
+      if (!codeHtml || !codeHtml.trim()) {
+        alert('Export aborted: no rendered code found. Render the student\'s code before exporting.');
+        return;
+      }
 
       const combinedHljs = hljsMain + '\n' + hljsDiff;
 
@@ -116,19 +121,37 @@
       // Escape `</` to prevent breaking out of script tags
       const dataStr = JSON.stringify(submission).replace(/<\//g, '<\\/');
 
-      // 7. Substitute template
-      const outputHtml = template
-        .replaceAll('{{ASSIGNMENT_NAME}}', window.RedpenShared.escapeHtml(submission.assignmentName))
-        .replaceAll('{{STUDENT_NAME}}', window.RedpenShared.escapeHtml(submission.studentName))
-        .replace('{{THEME_STYLES}}', themeCss)
-        .replace('{{STYLES}}', viewerCss)
-        .replace('{{SCORE_BLOCK}}', scoreBlock)
-        .replace('{{OVERALL_COMMENT}}', overallCommentBlock)
-        .replace('{{CODE_BODY}}', codeHtml)
-        .replace('{{PRINT_ANNOTATIONS}}', printAnnotationsHtml)
-        .replace('{{DATA}}', dataStr)
-        .replace('{{HIGHLIGHT_JS}}', combinedHljs)
-        .replace('{{VIEWER_RUNTIME_JS}}', viewerRuntimeJs);
+      // 7. Substitute template. Use function-form replacements throughout —
+      // string-form replace interprets $&, $`, $', $1..$9, $$ in the payload,
+      // which mangles regex strings inside the inlined viewer runtime / hljs.
+      const subs = {
+        '{{ASSIGNMENT_NAME}}': window.RedpenShared.escapeHtml(submission.assignmentName),
+        '{{STUDENT_NAME}}': window.RedpenShared.escapeHtml(submission.studentName),
+        '{{THEME_STYLES}}': themeCss,
+        '{{STYLES}}': viewerCss,
+        '{{SCORE_BLOCK}}': scoreBlock,
+        '{{OVERALL_COMMENT}}': overallCommentBlock,
+        '{{CODE_BODY}}': codeHtml,
+        '{{PRINT_ANNOTATIONS}}': printAnnotationsHtml,
+        '{{DATA}}': dataStr,
+        '{{HIGHLIGHT_JS}}': combinedHljs,
+        '{{VIEWER_RUNTIME_JS}}': viewerRuntimeJs,
+      };
+      let outputHtml = template;
+      for (const placeholder of Object.keys(subs)) {
+        const value = subs[placeholder];
+        // Walk the string and replace every occurrence (covers ASSIGNMENT_NAME
+        // / STUDENT_NAME, which appear twice in the template).
+        let out = '';
+        let i = 0;
+        while (i < outputHtml.length) {
+          const idx = outputHtml.indexOf(placeholder, i);
+          if (idx === -1) { out += outputHtml.substring(i); break; }
+          out += outputHtml.substring(i, idx) + value;
+          i = idx + placeholder.length;
+        }
+        outputHtml = out;
+      }
 
       // 8. Generate Filename
       const safeStudent = submission.studentName.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
