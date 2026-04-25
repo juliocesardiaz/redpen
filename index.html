@@ -176,6 +176,12 @@
         inject(DIFF, bootApp, bootApp);
       }
       function bootApp() {
+        var s0 = document.createElement('script');
+        s0.src = 'viewer-assets.js';
+        s0.async = false;
+        s0.defer = false;
+        document.head.appendChild(s0);
+
         var s1 = document.createElement('script');
         s1.src = 'viewer-runtime.js';
         s1.async = false;
