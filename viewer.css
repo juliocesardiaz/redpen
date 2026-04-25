@@ -165,7 +165,8 @@ html, body {
   background: color-mix(in srgb, var(--hl) 22%, transparent);
   box-shadow: inset 0 -2px 0 0 var(--hl);
 }
-.annotation-span:hover, .annotation-span.active {
+.annotation-span.hovered,
+.annotation-span.active {
   background: color-mix(in srgb, var(--hl) 42%, transparent);
 }
 
@@ -185,7 +186,7 @@ html, body {
 .line.has-line-range .line-content {
   background: color-mix(in srgb, var(--hl) 14%, transparent);
 }
-.line.has-line-range:hover .line-content {
+.line.has-line-range.hovered .line-content {
   background: color-mix(in srgb, var(--hl) 28%, transparent);
   box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--hl) 60%, transparent);
 }
@@ -195,7 +196,7 @@ html, body {
   border-left: 3px solid color-mix(in srgb, var(--hl) 80%, transparent);
   padding-left: 11px;
 }
-.line.has-block:hover .line-content {
+.line.has-block.hovered .line-content {
   background: color-mix(in srgb, var(--hl) 18%, transparent);
   border-left-color: var(--hl);
 }

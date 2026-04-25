@@ -224,27 +224,89 @@
     }
   }
 
+  function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return String(s).replace(/"/g, '\\"');
+  }
+
+  // Resolve a click/hover anywhere inside the code view to its annotation.
+  // Innermost wins: climb from event.target looking for [data-annotation-id].
+  // If none found (e.g., the user clicked the line-range/block wash to the
+  // right of all text, or on trailing whitespace) fall back to the .line
+  // row's data-line-level-annotation-id, which the author-mode renderer
+  // baked in for exactly this case.
+  function resolveAnnotationFromTarget(target, codeView) {
+    let node = target;
+    while (node && node !== codeView) {
+      if (node.dataset && node.dataset.annotationId) {
+        return { id: node.dataset.annotationId, anchor: node };
+      }
+      node = node.parentElement;
+    }
+    let lineEl = target;
+    while (lineEl && lineEl !== codeView && !(lineEl.classList && lineEl.classList.contains('line'))) {
+      lineEl = lineEl.parentElement;
+    }
+    if (lineEl && lineEl.dataset && lineEl.dataset.lineLevelAnnotationId) {
+      return {
+        id: lineEl.dataset.lineLevelAnnotationId,
+        anchor: lineEl.querySelector('.line-content') || lineEl,
+      };
+    }
+    return null;
+  }
+
   function wireAnnotations() {
     const codeView = document.querySelector('.code-view');
     if (!codeView) return;
 
     codeView.addEventListener('click', function(e) {
-      const hit = e.target.closest('.annotation');
+      const hit = resolveAnnotationFromTarget(e.target, codeView);
       if (!hit) return;
-
-      const id = hit.dataset.annotationId;
-      if (!id) return;
-
       e.stopPropagation();
-
-      if (tooltip.dataset.annotationId === id && !tooltip.classList.contains('hidden')) {
+      if (tooltip.dataset.annotationId === hit.id && !tooltip.classList.contains('hidden')) {
         closeTooltip();
       } else {
-        tooltip.dataset.annotationId = id;
-        populateTooltip(id);
-        positionTooltip(hit);
+        tooltip.dataset.annotationId = hit.id;
+        populateTooltip(hit.id);
+        positionTooltip(hit.anchor);
       }
     });
+
+    // Cross-element hover sync. A single annotation often becomes several
+    // sibling .annotation spans (hljs token boundaries split them, multi-
+    // line ranges produce one segment per line). Driving the highlight
+    // from per-element :hover would only light up the segment under the
+    // cursor; drive it from a JS-managed .hovered class so every segment
+    // (and, for a line-level annotation, every row in the range) responds
+    // as a single unit.
+    let hoveredId = null;
+    function applyHovered(id) {
+      const parts = codeView.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
+      parts.forEach(function (p) { p.classList.add('hovered'); });
+      const a = getAnnotationById(id);
+      if (a && (a.type === 'line-range' || a.type === 'block')) {
+        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
+          const row = codeView.querySelector('.line[data-line="' + ln + '"]');
+          if (row) row.classList.add('hovered');
+        }
+      }
+    }
+    function clearHovered() {
+      const parts = codeView.querySelectorAll('.annotation.hovered, .line.hovered');
+      parts.forEach(function (p) { p.classList.remove('hovered'); });
+    }
+    function setHovered(id) {
+      if (id === hoveredId) return;
+      clearHovered();
+      hoveredId = id;
+      if (id) applyHovered(id);
+    }
+    codeView.addEventListener('mousemove', function (e) {
+      const hit = resolveAnnotationFromTarget(e.target, codeView);
+      setHovered(hit ? hit.id : null);
+    });
+    codeView.addEventListener('mouseleave', function () { setHovered(null); });
   }
 
   function wireTooltip() {
