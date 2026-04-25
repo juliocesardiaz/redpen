@@ -11,6 +11,7 @@
   --accent: #2b6cb0;
   --accent-strong: #1e4e8c;
   --danger: #c0392b;
+  --redpen: #c0392b;
   --shadow-sm: 0 1px 2px rgba(16, 22, 26, 0.08);
   --shadow-md: 0 4px 16px rgba(16, 22, 26, 0.12);
   --radius: 6px;
@@ -19,6 +20,7 @@
   --code-font-size: 13px;
   --code-line-height: 1.55;
   --gutter-w: 48px;
+  --content-max: 1100px;
 }
 
 * { box-sizing: border-box; }
@@ -36,53 +38,78 @@ html, body {
 
 /* --- Header ----------------------------------------------------------- */
 .redpen-header {
-  padding: 24px 32px;
+  position: relative;
+  padding: 28px 32px 24px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  background: var(--bg-muted);
+  gap: 24px;
+}
+/* Thin red accent at the very top — the only branding cue. */
+.redpen-header::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--redpen);
 }
 .redpen-header .meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 .redpen-header .assignment {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text);
+  word-wrap: break-word;
 }
 .redpen-header .student {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text-muted);
 }
 .redpen-header .score {
-  font-size: 32px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
 }
 
 /* --- Overall Comment -------------------------------------------------- */
 .overall-comment {
-  padding: 24px 32px;
+  padding: 20px 32px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 /* --- Code View -------------------------------------------------------- */
 .code-view {
-  flex: 1;
   position: relative;
   overflow: auto;
   background: var(--bg);
 }
 .code-pre {
   margin: 0;
-  padding: 16px 0 64px 0;
+  padding: 0;
 }
 .code-lines {
   display: block;
@@ -91,59 +118,93 @@ html, body {
   line-height: var(--code-line-height);
   tab-size: 4;
   -moz-tab-size: 4;
+  background: transparent;
+  padding: 12px 0 48px;
 }
 
-.line-wrapper { display: flex; }
-.line-num {
-  flex: 0 0 var(--gutter-w);
-  box-sizing: border-box;
-  padding-right: 12px;
-  text-align: right;
-  color: var(--text-faint);
+/* Line layout matches author mode: grid with a fixed-width gutter and a
+ * full-width content cell. Author mode renders <div class="line">,
+ * <span class="line-number">, <span class="line-content">. */
+.line {
+  display: grid;
+  grid-template-columns: var(--gutter-w) 1fr;
+  align-items: stretch;
+  min-height: calc(var(--code-font-size) * var(--code-line-height));
+}
+.line-number {
   user-select: none;
+  -webkit-user-select: none;
+  text-align: right;
+  padding: 0 12px 0 8px;
+  color: var(--text-faint);
+  border-right: 1px solid var(--border);
+  background: var(--bg-muted);
+  font-variant-numeric: tabular-nums;
 }
 .line-content {
-  flex: 1;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  padding: 0 14px;
+  white-space: pre;
+  overflow-wrap: normal;
+  min-width: 0;
 }
-.line-wrapper.empty-line .line-content::before { content: "\200B"; }
 
-/* --- Annotations ------------------------------------------------------ */
+/* --- Annotations ------------------------------------------------------
+ * Author mode and the viewer share the same DOM shape — line-level
+ * annotations get .has-line-range / .has-block flags on the .line row,
+ * and the visual wash sits on .line-content (so it extends across the
+ * full row, not just the wrapped span). The .annotation-* spans stay
+ * transparent — they exist for click routing and tag color, not paint.
+ */
 .annotation {
   cursor: pointer;
-  transition: background-color 100ms ease;
+  border-radius: 2px;
+  transition: background-color 120ms ease;
 }
 .annotation-span {
-  background-color: rgba(243, 156, 18, 0.25);
-  border-radius: 3px;
-  padding: 1px 0;
+  --hl: #d97706;
+  background: color-mix(in srgb, var(--hl) 22%, transparent);
+  box-shadow: inset 0 -2px 0 0 var(--hl);
 }
 .annotation-span:hover, .annotation-span.active {
-  background-color: rgba(243, 156, 18, 0.45);
-}
-.annotation-line-range {
-  background-color: rgba(43, 108, 176, 0.12);
-  border-left: 3px solid var(--accent);
-  margin-left: -3px;
-  padding-left: 3px;
-  border-radius: 0 3px 3px 0;
-}
-.annotation-line-range:hover, .annotation-line-range.active {
-  background-color: rgba(43, 108, 176, 0.22);
-}
-.annotation-block {
-  background-color: rgba(39, 174, 96, 0.12);
-  border-left: 3px solid #27ae60;
-  margin-left: -3px;
-  padding-left: 3px;
-  border-radius: 0 3px 3px 0;
-}
-.annotation-block:hover, .annotation-block.active {
-  background-color: rgba(39, 174, 96, 0.22);
+  background: color-mix(in srgb, var(--hl) 42%, transparent);
 }
 
-/* Print expansion markers */
+.annotation-line-range,
+.annotation-block {
+  background: transparent;
+}
+
+.line {
+  --hl: #3498db;
+}
+.line.has-line-range .line-content,
+.line.has-block .line-content {
+  cursor: pointer;
+  transition: background-color 120ms ease, border-left-color 120ms ease;
+}
+.line.has-line-range .line-content {
+  background: color-mix(in srgb, var(--hl) 14%, transparent);
+}
+.line.has-line-range:hover .line-content {
+  background: color-mix(in srgb, var(--hl) 28%, transparent);
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--hl) 60%, transparent);
+}
+
+.line.has-block .line-content {
+  background: color-mix(in srgb, var(--hl) 7%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--hl) 80%, transparent);
+  padding-left: 11px;
+}
+.line.has-block:hover .line-content {
+  background: color-mix(in srgb, var(--hl) 18%, transparent);
+  border-left-color: var(--hl);
+}
+
+.line.has-line-range.has-block .line-content {
+  background: color-mix(in srgb, var(--hl) 16%, transparent);
+}
+
+/* Superscript markers — hidden on screen, shown in print. */
 .annotation-sup {
   display: none;
 }
@@ -311,46 +372,130 @@ html, body {
 .hidden { display: none !important; }
 .hidden-screen { display: none; }
 
-/* --- Print Styles ----------------------------------------------------- */
+/* --- Print Styles -----------------------------------------------------
+ * Goals: clean A4/Letter output, line-content washes preserved for the
+ * line-range / block annotations, no clipped tooltips, footnotes after
+ * the code with a numbered marker matching the inline superscript. */
 @media print {
-  body { background: white; color: black; }
-  .tooltip { display: none !important; }
-  .redpen-header {
-    border-bottom: 2px solid black;
-    background: transparent;
-    padding: 0 0 16px 0;
-    margin-bottom: 24px;
+  @page {
+    size: auto;
+    margin: 18mm 16mm;
   }
+  html, body {
+    background: white;
+    color: black;
+    font-size: 11pt;
+  }
+  /* Force colour-accurate printing for the annotation washes. Without
+   * this most browsers strip backgrounds in print. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .tooltip { display: none !important; }
+
+  .redpen-header {
+    background: transparent;
+    border-bottom: 2px solid black;
+    padding: 0 0 12px 0;
+    margin-bottom: 20px;
+    page-break-after: avoid;
+  }
+  .redpen-header::before { display: none; }
+  .redpen-header .assignment { font-size: 18pt; }
+  .redpen-header .student { font-size: 11pt; color: #333; }
+  .redpen-header .score {
+    background: transparent;
+    border: 1.5pt solid black;
+    box-shadow: none;
+    color: black;
+    font-size: 12pt;
+    padding: 4px 10px;
+  }
+
   .overall-comment {
+    background: transparent;
     border: none;
     padding: 0;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
   }
+
   .code-view { overflow: visible; }
-  .code-pre { padding: 0; }
+  .code-pre, .code-lines {
+    padding: 0;
+    background: white;
+  }
+  .code-lines {
+    font-size: 9.5pt;
+    line-height: 1.45;
+  }
+  .line { page-break-inside: avoid; }
+  .line-number {
+    background: transparent;
+    border-right: 1pt solid #888;
+    color: #555;
+  }
+  /* Line-content wash needs to print — keep the soft background even
+   * without colour-adjust by also drawing a thin left border. */
+  .line.has-line-range .line-content {
+    background: rgba(43, 108, 176, 0.10);
+  }
+  .line.has-block .line-content {
+    background: rgba(39, 174, 96, 0.08);
+    border-left: 2.5pt solid #1f5e3b;
+    padding-left: 10px;
+  }
+  .annotation-span {
+    background: rgba(217, 119, 6, 0.18) !important;
+    box-shadow: none;
+    border-bottom: 1pt solid #b86e00;
+  }
 
   .annotation-sup {
     display: inline;
-    font-size: 10px;
-    font-weight: bold;
-    color: var(--danger);
+    font-size: 8pt;
+    font-weight: 700;
+    color: var(--redpen);
     vertical-align: super;
+    margin-right: 1px;
   }
 
   .hidden-screen { display: block !important; }
   .print-annotations {
-    margin-top: 40px;
+    margin-top: 28px;
+    padding-top: 16px;
     border-top: 2px solid black;
-    padding-top: 24px;
+    page-break-before: auto;
+  }
+  .print-annotations::before {
+    content: "Annotations";
+    display: block;
+    font-size: 13pt;
+    font-weight: 700;
+    margin-bottom: 12px;
   }
   .print-annotation {
     page-break-inside: avoid;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
   .print-annotation-header {
-    font-weight: bold;
+    font-weight: 700;
     margin-bottom: 4px;
+    font-size: 10.5pt;
   }
-  .print-annotation-tags { display: inline-flex; gap: 4px; margin-left: 8px; }
-  .print-annotation-body { margin-left: 16px; }
+  .print-annotation-tags {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 8px;
+  }
+  .print-annotation-tags .tag-chip {
+    border: 0.5pt solid #888;
+    color: black !important;
+    background: white !important;
+  }
+  .print-annotation-body { margin-left: 14px; font-size: 10pt; line-height: 1.4; }
+  .print-annotation-body .markdown-body p { margin: 0 0 4px 0; }
+  .print-annotation-body .md-code-copy { display: none; }
+  .print-annotation-body .md-code-pre { padding-right: 12px; }
 }
