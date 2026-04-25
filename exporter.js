@@ -51,32 +51,31 @@
       let printAnnotationsHtml = '';
       if (submission.annotations && submission.annotations.length > 0) {
         let printCounter = 1;
-        // In the author mode, annotations are rendered with spans, but we need to inject the `<sup>` markers for printing into `codeHtml`
-        // However, instead of modifying `codeHtml` which is complex, we'll just output the print annotations at the bottom. The spec says:
-        // "Print all annotations expanded as footnotes after the code, numbered to match small superscript markers next to each annotation in the code"
-        // Wait, we need to inject `<sup>` tags into `codeHtml` inside each annotation span!
-        // We can do this with a quick regex on codeHtml or by parsing it with DOM.
+        // Insert <sup> markers into the code HTML and build the footnote list.
+        // A single annotation can become multiple sibling .annotation spans
+        // (hljs token boundaries split them, and multi-line ranges produce one
+        // span per line) — only the first segment in document order gets the
+        // numbered superscript so the footnote count matches what the reader
+        // sees inline.
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = codeHtml;
         const annotationNodes = tempDiv.querySelectorAll('.annotation');
 
-        let idToNumber = {};
+        const idToNumber = {};
+        const supPlacedFor = new Set();
 
         annotationNodes.forEach((node) => {
           const annId = node.dataset.annotationId;
-          if (annId) {
-            if (!idToNumber[annId]) {
-              idToNumber[annId] = printCounter++;
-            }
-            // Only add superscript to the first part of an annotation (some annotations span multiple lines)
-            if (!node.querySelector('.annotation-sup')) {
-              const sup = document.createElement('sup');
-              sup.className = 'annotation-sup';
-              sup.textContent = idToNumber[annId];
-              // insert at start
-              node.insertBefore(sup, node.firstChild);
-            }
+          if (!annId) return;
+          if (!(annId in idToNumber)) {
+            idToNumber[annId] = printCounter++;
           }
+          if (supPlacedFor.has(annId)) return;
+          supPlacedFor.add(annId);
+          const sup = document.createElement('sup');
+          sup.className = 'annotation-sup';
+          sup.textContent = idToNumber[annId];
+          node.insertBefore(sup, node.firstChild);
         });
         codeHtml = tempDiv.innerHTML;
 
