@@ -1177,7 +1177,7 @@ body {
   z-index: 80;
   box-sizing: border-box;
   min-width: 0;
-  width: 90vw;
+  width: max-content;
   max-width: 90vw;
   max-height: 400px;
   padding: 18px 20px;
@@ -1225,7 +1225,7 @@ body {
 }
 
 .tooltip-content { display: flex; flex-direction: column; gap: 12px; }
-.tooltip-comment { word-wrap: break-word; overflow-wrap: anywhere; min-width: 0; }
+.tooltip-comment { word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
 .tooltip-comment * { min-width: 0; max-width: 100%; }
 .tooltip-divider {
   border: none;
