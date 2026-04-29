@@ -22,8 +22,26 @@
   let queue = [submission];
   let activeIdx = 0;
 
-  // Built from the optional CSV picker. Empty Map until the user loads one.
-  let nameMap = new Map();
+  // Built from the optional CSV picker. Array of string arrays.
+  let csvRows = [];
+
+  function findNameInCsv(username) {
+    const target = (username || '').trim().toLowerCase();
+    if (!target) return null;
+
+    for (const row of csvRows) {
+      const matchIdx = row.findIndex(cell => (cell || '').trim().toLowerCase() === target);
+      if (matchIdx !== -1) {
+        // Take all other words on the line, clean them up, and join them
+        const nameParts = row.filter((cell, idx) => {
+          const val = (cell || '').trim();
+          return idx !== matchIdx && val !== '';
+        });
+        return nameParts.join(' ').trim();
+      }
+    }
+    return null;
+  }
 
   function newSubmission() {
     const now = Date.now();
@@ -499,37 +517,24 @@
     return rows;
   }
 
-  function buildNameMap(rows) {
-    const m = new Map();
-    if (!rows.length) return m;
-    const headerKeys = ['username', 'user', 'login', 'id'];
-    const start = headerKeys.includes((rows[0][0] || '').trim().toLowerCase()) ? 1 : 0;
-    for (let i = start; i < rows.length; i++) {
-      const [u, n] = rows[i];
-      if (u && n) m.set(u.trim().toLowerCase(), n.trim());
-    }
-    return m;
-  }
-
   function isPristineSubmission(s) {
     return !s.studentName && !s.assignmentName && !s.code &&
            s.annotations.length === 0 && !s.overallComment;
   }
 
-  async function makeSubmissionFromFile(file, mapping) {
+  async function makeSubmissionFromFile(file) {
     const parsed = parseFilename(file.name);
     const text = (await file.text()).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const s = newSubmission();
     s._username = parsed.username;
-    const lookupKey = (parsed.username || '').toLowerCase();
-    s.studentName = (mapping && mapping.get(lookupKey)) || parsed.username;
+    s.studentName = findNameInCsv(parsed.username) || parsed.username;
     s.assignmentName = parsed.project || '';
     s.language = parsed.language || submission.language;
     s.code = text;
     return s;
   }
 
-  async function importFolder(fileList, mapping) {
+  async function importFolder(fileList) {
     if (!fileList || !fileList.length) return;
     const files = Array.from(fileList).filter(function (f) {
       const dot = f.name.lastIndexOf('.');
@@ -548,7 +553,7 @@
     const built = [];
     for (const f of files) {
       try {
-        built.push(await makeSubmissionFromFile(f, mapping));
+        built.push(await makeSubmissionFromFile(f));
       } catch (e) {
         console.warn('redpen: failed to read', f.name, e);
       }
@@ -685,7 +690,7 @@
   function wireImport() {
     el.folderInput.addEventListener('change', async function (e) {
       const files = e.target.files;
-      await importFolder(files, nameMap);
+      await importFolder(files);
       e.target.value = '';
     });
     el.csvInput.addEventListener('change', async function (e) {
@@ -693,19 +698,21 @@
       if (!f) return;
       try {
         const text = await f.text();
-        const rows = parseCsv(text);
-        nameMap = buildNameMap(rows);
+        csvRows = parseCsv(text);
         
         // Re-derive student names for any entries that were imported before
         // the CSV. Only overwrite entries whose studentName still matches the
         // raw username (i.e., the teacher hasn't manually edited them).
         let touched = 0;
         for (const s of queue) {
-          const username = (s._username || '').trim().toLowerCase();
-          const current = (s.studentName || '').trim().toLowerCase();
-          if (username && nameMap.has(username) && (current === username || current === '')) {
-            s.studentName = nameMap.get(username);
-            touched++;
+          const realName = findNameInCsv(s._username);
+          if (realName) {
+            const current = (s.studentName || '').trim().toLowerCase();
+            const username = (s._username || '').trim().toLowerCase();
+            if (current === username || current === '') {
+              s.studentName = realName;
+              touched++;
+            }
           }
         }
 
@@ -713,10 +720,10 @@
         const label = document.getElementById('csv-input-label');
         if (label) {
           const originalText = label.textContent;
-          label.textContent = `Names CSV ✓ ${nameMap.size} loaded`;
+          label.textContent = `Names CSV ✓ ${csvRows.length} rows`;
           setTimeout(() => { label.textContent = originalText; }, 2500);
         }
-        console.info('redpen: loaded', nameMap.size, 'name mappings');
+        console.info('redpen: loaded', csvRows.length, 'CSV rows');
 
         // Always re-render to update the topbar/drawer even if 0 items were "touched"
         // (the active student name or drawer labels might need refresh).
