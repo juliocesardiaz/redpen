@@ -701,9 +701,10 @@
         // raw username (i.e., the teacher hasn't manually edited them).
         let touched = 0;
         for (const s of queue) {
-          const lookupKey = (s._username || '').toLowerCase();
-          if (s._username && nameMap.has(lookupKey) && s.studentName === s._username) {
-            s.studentName = nameMap.get(lookupKey);
+          const username = (s._username || '').trim().toLowerCase();
+          const current = (s.studentName || '').trim().toLowerCase();
+          if (username && nameMap.has(username) && (current === username || current === '')) {
+            s.studentName = nameMap.get(username);
             touched++;
           }
         }
