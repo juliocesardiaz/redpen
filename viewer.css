@@ -295,12 +295,16 @@ html, body {
   padding-right: 72px;
   overflow-x: auto;
   background: transparent;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .markdown-body .md-code-pre code {
   font-family: var(--mono);
   font-size: 12.5px;
   line-height: 1.5;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   background: transparent;
   padding: 0;
   display: block;
@@ -311,8 +315,8 @@ html, body {
   position: fixed;
   z-index: 80;
   box-sizing: border-box;
-  min-width: 280px;
-  max-width: 500px;
+  min-width: 0;
+  max-width: min(560px, calc(100vw - 32px));
   max-height: 400px;
   padding: 18px 20px;
   background: var(--bg);
@@ -359,7 +363,8 @@ html, body {
 }
 
 .tooltip-content { display: flex; flex-direction: column; gap: 12px; }
-.tooltip-comment { word-wrap: break-word; overflow-wrap: anywhere; }
+.tooltip-comment { word-wrap: break-word; overflow-wrap: anywhere; min-width: 0; }
+.tooltip-comment * { min-width: 0; max-width: 100%; }
 .tooltip-divider {
   border: none;
   border-top: 1px solid var(--border);
