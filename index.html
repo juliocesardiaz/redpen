@@ -23,10 +23,20 @@
         <span class="score-slash">/</span>
         <input id="score-total" class="score-input" type="number" min="0" step="1" placeholder="0" />
       </span>
+      <span class="import-group" aria-label="Import">
+        <label class="btn btn-small" for="folder-input">Import folder</label>
+        <input id="folder-input" class="hidden-input" type="file" webkitdirectory directory multiple />
+        <label id="csv-input-label" class="btn btn-small" for="csv-input" title="CSV columns: username,realname (header optional)">Names CSV</label>
+        <input id="csv-input" class="hidden-input" type="file" accept=".csv,text/csv" />
+        <button id="btn-prev" class="btn btn-small" type="button" aria-label="Previous submission" disabled>‹</button>
+        <span id="queue-counter" class="queue-counter" aria-live="polite"></span>
+        <button id="btn-next" class="btn btn-small" type="button" aria-label="Next submission" disabled>›</button>
+      </span>
     </div>
     <div class="topbar-group topbar-right">
       <button id="btn-tags" class="btn" type="button">Tags</button>
       <button id="btn-export" class="btn btn-primary" type="button" >Export HTML</button>
+      <button id="btn-export-all" class="btn" type="button" disabled title="Import a folder to enable batch export">Export all</button>
       <button id="btn-new" class="btn" type="button">New</button>
     </div>
   </header>
@@ -77,6 +87,18 @@
       </section>
     </aside>
   </main>
+
+  <aside id="queue-drawer" class="queue-drawer collapsed" aria-label="Submissions queue">
+    <button id="queue-drawer-handle" class="queue-drawer-handle" type="button"
+            aria-controls="queue-drawer" aria-expanded="false"
+            title="Toggle submissions list">▸</button>
+    <div class="queue-drawer-body">
+      <header class="queue-drawer-header">
+        <h2 class="queue-drawer-title">Submissions <span id="queue-count" class="queue-count">0</span></h2>
+      </header>
+      <ul id="queue-list" class="queue-list" role="listbox" aria-label="Submissions"></ul>
+    </div>
+  </aside>
 
   <!-- Floating "+ Comment" button, positioned near the current selection. -->
   <button id="comment-btn" class="comment-btn hidden" type="button" aria-label="Add comment">+ Comment</button>
@@ -193,6 +215,14 @@
         s2.async = false;
         s2.defer = false;
         document.head.appendChild(s2);
+
+        // JSZip is sanctioned only for batch export. Soft-fail if absent —
+        // app.js disables #btn-export-all if window.JSZip is missing.
+        var sz = document.createElement('script');
+        sz.src = 'vendor/jszip.min.js';
+        sz.async = false;
+        sz.defer = false;
+        document.head.appendChild(sz);
 
         var s = document.createElement('script');
         s.src = 'app.js';
