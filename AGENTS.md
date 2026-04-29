@@ -16,7 +16,7 @@ These are non-negotiable. Push back on the user before breaking any of them.
 - **No build step. Ever.** No bundler, no transpiler, no `package.json`, no `npm install`. The repo is opened by double-clicking `index.html`. If you're tempted to add tooling, you've misunderstood the project.
 - **All-browser, vanilla JS only.** No React/Vue/Svelte/etc. Plain `<script>` tags. ES2017+ is fine; target current Chrome/Firefox/Safari.
 - **Works fully offline.** Both author mode and exported files must work from `file://` with zero network access. Author mode tries CDN highlight.js but falls back to `vendor/`; exported files inline everything.
-- **Dependencies are capped:** `highlight.js` (vendored) today. Anything else — refuse and ask first.
+- **Dependencies are capped:** `highlight.js` (vendored) today; **JSZip** (vendored at `vendor/jszip.min.js`) is sanctioned as a one-off exception for batch export (zip a folder of student HTML files in the browser). Anything else — refuse and ask first.
 - **Exported HTML is self-contained.** All CSS, JS, and submission JSON are inlined into one file. No external links, no remote fonts, no CDNs in the export.
 - **No telemetry, no analytics, no remote logging.** Student data never leaves the teacher's machine.
 
@@ -24,7 +24,8 @@ These are non-negotiable. Push back on the user before breaking any of them.
 
 ```
 index.html              Author-mode shell. Loads scripts in order:
-                        viewer-assets.js → viewer-runtime.js → exporter.js → app.js
+                        viewer-assets.js → viewer-runtime.js → exporter.js →
+                        vendor/jszip.min.js → app.js
 app.js                  Author-mode logic — state, rendering, selection, modals,
                         annotation CRUD. Single IIFE, ~1900 lines.
 styles.css              Author-mode styles only. Viewer styles live separately.
@@ -49,9 +50,11 @@ viewer-assets.js        Source of truth for all inlined export assets:
                         No build script regenerates this file — viewerCss is
                         edited as a literal; the others must be re-pasted as
                         JSON-escaped strings when their sources change.
-vendor/                 highlight.min.js, highlight-diff.min.js, highlight-theme.css.
-                        Used by author mode as fallback after CDN; their content
-                        is also baked into viewer-assets.js for export.
+vendor/                 highlight.min.js, highlight-diff.min.js, highlight-theme.css,
+                        jszip.min.js. highlight.* are author-mode fallback after
+                        CDN and also baked into viewer-assets.js for export.
+                        jszip is author-mode only (batch export); never inlined
+                        into the viewer.
 test_headed.py          Playwright smoke test. Loads index.html via a local
                         server on :3000, fills the form, renders, exports.
 README.md               User-facing overview.
@@ -99,6 +102,8 @@ Tag     { id, label, color }                   // color is CSS hex
 7. Output is downloaded via `Blob` + object URL. Filename is `{student}_{assignment}_redpen.html`, sanitized: lowercased, non-`[a-z0-9_-]` collapsed to `_`, runs collapsed, edges trimmed, empty parts replaced with `student`/`assignment`.
 
 If you ever factor `exportSubmission` for batch use, it should return the HTML string and let a caller decide whether to download or zip it.
+
+As of the batch-export feature, that split exists: `buildExportHtml(submission): string` is the pure builder (throws on validation failures), and `exportSubmission(submission)` is a thin wrapper that handles alert + Blob download. `exportZipFromBuiltEntries(entries)` packages a list of `{filename, html}` into a JSZip blob and downloads it. Author mode also tracks a `queue: Submission[]` and an `activeIdx`; the live `#code-lines` element is the *only* rendering surface, so batch export iterates the queue by calling `setActive(i)` before each `buildExportHtml(queue[i])`, then restores the original active index. If you later want a headless renderer, factor `renderCodeView` against an arbitrary `<code>` element rather than the global `#code-lines`.
 
 ## Viewer runtime contract
 
