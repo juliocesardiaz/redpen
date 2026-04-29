@@ -152,12 +152,14 @@
     return outputHtml;
   }
 
+  function slugifyPart(s) {
+    return (s || '').toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  }
+
   function slugForSubmission(submission) {
-    const safeStudent = (submission.studentName || '').toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    const safeAssignment = (submission.assignmentName || '').toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    const finalStudent = safeStudent || 'student';
-    const finalAssignment = safeAssignment || 'assignment';
-    return `${finalStudent}_${finalAssignment}_redpen`;
+    const safeStudent = slugifyPart(submission.studentName) || 'student';
+    const safeAssignment = slugifyPart(submission.assignmentName) || 'assignment';
+    return `${safeStudent}_${safeAssignment}_redpen`;
   }
 
   function downloadBlob(blob, filename) {
@@ -188,7 +190,7 @@
   // Caller is responsible for cycling the active submission so #code-lines
   // is populated for each item (see batch caveat in buildExportHtml). We
   // don't render here — we only build per item using whatever's live.
-  async function exportZipFromBuiltEntries(entries) {
+  async function exportZipFromBuiltEntries(entries, filename) {
     if (!window.JSZip) {
       alert('Batch export unavailable: JSZip did not load.');
       return;
@@ -198,12 +200,13 @@
       zip.file(e.filename, e.html);
     }
     const blob = await zip.generateAsync({ type: 'blob' });
-    const today = new Date().toISOString().slice(0, 10);
-    downloadBlob(blob, `redpen_batch_${today}.zip`);
+    const finalName = filename || `redpen_batch_${new Date().toISOString().slice(0, 10)}.zip`;
+    downloadBlob(blob, finalName);
   }
 
   // Expose
   window.buildExportHtml = buildExportHtml;
+  window.slugifyPart = slugifyPart;
   window.slugForSubmission = slugForSubmission;
   window.exportSubmission = exportSubmission;
   window.exportZipFromBuiltEntries = exportZipFromBuiltEntries;

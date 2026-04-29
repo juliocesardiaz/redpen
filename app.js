@@ -478,6 +478,7 @@
   }
 
   function parseCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const rows = [];
     let row = [], field = '', inQuotes = false, i = 0;
     while (i < text.length) {
@@ -505,7 +506,7 @@
     const start = headerKeys.includes((rows[0][0] || '').trim().toLowerCase()) ? 1 : 0;
     for (let i = start; i < rows.length; i++) {
       const [u, n] = rows[i];
-      if (u && n) m.set(u.trim(), n.trim());
+      if (u && n) m.set(u.trim().toLowerCase(), n.trim());
     }
     return m;
   }
@@ -520,7 +521,8 @@
     const text = (await file.text()).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const s = newSubmission();
     s._username = parsed.username;
-    s.studentName = (mapping && mapping.get(parsed.username)) || parsed.username;
+    const lookupKey = (parsed.username || '').toLowerCase();
+    s.studentName = (mapping && mapping.get(lookupKey)) || parsed.username;
     s.assignmentName = parsed.project || '';
     s.language = parsed.language || submission.language;
     s.code = text;
@@ -691,20 +693,33 @@
       if (!f) return;
       try {
         const text = await f.text();
-        nameMap = buildNameMap(parseCsv(text));
+        const rows = parseCsv(text);
+        nameMap = buildNameMap(rows);
+        
         // Re-derive student names for any entries that were imported before
         // the CSV. Only overwrite entries whose studentName still matches the
         // raw username (i.e., the teacher hasn't manually edited them).
         let touched = 0;
         for (const s of queue) {
-          if (s._username && nameMap.has(s._username) && s.studentName === s._username) {
-            s.studentName = nameMap.get(s._username);
+          const lookupKey = (s._username || '').toLowerCase();
+          if (s._username && nameMap.has(lookupKey) && s.studentName === s._username) {
+            s.studentName = nameMap.get(lookupKey);
             touched++;
           }
         }
-        if (touched > 0) {
-          loadSubmissionIntoUI();
+
+        // Visible feedback
+        const label = document.getElementById('csv-input-label');
+        if (label) {
+          const originalText = label.textContent;
+          label.textContent = `Names CSV ✓ ${nameMap.size} loaded`;
+          setTimeout(() => { label.textContent = originalText; }, 2500);
         }
+        console.info('redpen: loaded', nameMap.size, 'name mappings');
+
+        // Always re-render to update the topbar/drawer even if 0 items were "touched"
+        // (the active student name or drawer labels might need refresh).
+        loadSubmissionIntoUI();
       } catch (err) {
         console.error('redpen: CSV parse failed', err);
         alert('Failed to read CSV: ' + err.message);
@@ -773,11 +788,30 @@
       alert('No submissions exported. Issues:\n' + failures.map(function (f) { return '- ' + f.name + ': ' + f.error; }).join('\n'));
       return;
     }
-    await window.exportZipFromBuiltEntries(entries);
+    await window.exportZipFromBuiltEntries(entries, deriveBatchFilename());
     if (failures.length > 0) {
       alert('Exported ' + entries.length + ' / ' + queue.length + '. Skipped:\n' +
         failures.map(function (f) { return '- ' + f.name + ': ' + f.error; }).join('\n'));
     }
+  }
+
+  function deriveBatchFilename() {
+    const counts = new Map();
+    let max = 0;
+    let winner = '';
+    for (const s of queue) {
+      const a = (s.assignmentName || '').trim();
+      if (!a) continue;
+      const c = (counts.get(a) || 0) + 1;
+      counts.set(a, c);
+      if (c > max) {
+        max = c;
+        winner = a;
+      }
+    }
+    const slug = window.slugifyPart(winner);
+    if (!slug) return null; // fallback to default in exporter
+    return `${slug}_redpen.zip`;
   }
 
   // ------------------------------------------------------------------
