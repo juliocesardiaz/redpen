@@ -316,7 +316,8 @@ html, body {
   z-index: 80;
   box-sizing: border-box;
   min-width: 0;
-  max-width: min(560px, calc(100vw - 32px));
+  width: 90vw;
+  max-width: 90vw;
   max-height: 400px;
   padding: 18px 20px;
   background: var(--bg);
