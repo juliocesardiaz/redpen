@@ -34,12 +34,23 @@
       </span>
     </div>
     <div class="topbar-group topbar-right">
+      <span id="autosave-status" class="autosave-status" aria-live="polite" title="Autosave status"></span>
+      <button id="btn-backup-file" class="btn btn-small hidden" type="button" title="Choose a file on disk to keep in sync with your grading work">Enable backup file</button>
       <button id="btn-tags" class="btn" type="button">Tags</button>
       <button id="btn-export" class="btn btn-primary" type="button" >Export HTML</button>
       <button id="btn-export-all" class="btn" type="button" disabled title="Import a folder to enable batch export">Export all</button>
       <button id="btn-new" class="btn" type="button">New</button>
     </div>
   </header>
+
+  <!-- Autosave restore banner. Shown on load if a saved draft exists. -->
+  <div id="restore-banner" class="restore-banner hidden" role="status" aria-live="polite">
+    <span id="restore-banner-msg" class="restore-banner-msg"></span>
+    <span class="restore-banner-actions">
+      <button id="restore-banner-restore" class="btn btn-small btn-primary" type="button">Restore</button>
+      <button id="restore-banner-discard" class="btn btn-small" type="button">Discard</button>
+    </span>
+  </div>
 
   <main class="workspace">
     <section class="code-column" aria-label="Code">
