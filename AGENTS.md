@@ -25,9 +25,12 @@ These are non-negotiable. Push back on the user before breaking any of them.
 ```
 index.html              Author-mode shell. Loads scripts in order:
                         viewer-assets.js → viewer-runtime.js → exporter.js →
-                        vendor/jszip.min.js → app.js
-app.js                  Author-mode logic — state, rendering, selection, modals,
-                        annotation CRUD. Single IIFE, ~1900 lines.
+                        vendor/jszip.min.js → the five redpen-author-*.js files.
+redpen-author-core.js   Author-mode logic, split across 5 files (was app.js).
+redpen-author-import.js Each is an IIFE; they share state through the
+redpen-author-comments.js  window.Redpen namespace — see "Author-mode files"
+redpen-author-tags.js      below. Load order is core → import → comments →
+redpen-author-main.js      tags → main; main runs init() last.
 styles.css              Author-mode styles only. Viewer styles live separately.
 exporter.js             Builds the exported HTML string from `submission` +
                         live `#code-lines` innerHTML, then triggers download.
