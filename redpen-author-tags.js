@@ -74,7 +74,7 @@
     const color = el.newTagColor.value || '#3498db';
     const tag = { id: R.uuid(), label: label, color: color };
     state.submission.tags.push(tag);
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     // Auto-select the newly-created tag on the annotation being edited.
     if (!el.modalBackdrop.classList.contains('hidden')) {
       state.editingTagIds.push(tag.id);
@@ -128,7 +128,7 @@
     swatch.setAttribute('aria-label', 'Color for ' + tag.label);
     swatch.addEventListener('input', function () {
       tag.color = swatch.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
     });
     row.appendChild(swatch);
 
@@ -140,7 +140,7 @@
     labelInput.setAttribute('aria-label', 'Tag name');
     labelInput.addEventListener('input', function () {
       tag.label = labelInput.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
     });
     row.appendChild(labelInput);
 
@@ -170,14 +170,14 @@
       if (!a.tagIds) continue;
       a.tagIds = a.tagIds.filter(function (tid) { return tid !== id; });
     }
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     renderTagRows();
   }
 
   function addNewTagRow() {
     const tag = { id: R.uuid(), label: 'New tag', color: pickNextDefaultColor() };
     state.submission.tags.push(tag);
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     renderTagRows();
     // Focus and select the label of the newly-added row so it's immediately
     // rename-ready.

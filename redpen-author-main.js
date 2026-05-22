@@ -20,17 +20,17 @@
   function wireMetadata() {
     el.studentName.addEventListener('input', function () {
       state.submission.studentName = el.studentName.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
       R.renderQueueDrawer();
       R.updateQueueCounter();
     });
     el.assignmentName.addEventListener('input', function () {
       state.submission.assignmentName = el.assignmentName.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
     });
     el.languageSelect.addEventListener('change', function () {
       state.submission.language = el.languageSelect.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
       // Re-render the code view with the newly selected language if code is
       // already pasted. Annotations would need the same language context, so
       // in later steps consider whether to lock language alongside code.
@@ -39,16 +39,16 @@
     el.scoreEarned.addEventListener('input', function () {
       const v = el.scoreEarned.value === '' ? null : Number(el.scoreEarned.value);
       state.submission.score.earned = Number.isFinite(v) ? v : null;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
     });
     el.scoreTotal.addEventListener('input', function () {
       const v = el.scoreTotal.value === '' ? null : Number(el.scoreTotal.value);
       state.submission.score.total = Number.isFinite(v) ? v : null;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
     });
     el.overallComment.addEventListener('input', function () {
       state.submission.overallComment = el.overallComment.value;
-      state.submission.updatedAt = Date.now();
+      R.markDirty();
       // Live-update the preview when it's currently showing.
       if (state.overallView === 'preview') renderOverallPreview();
     });
@@ -314,6 +314,7 @@
   }
 
   function resetEverything() {
+    R.clearAutosaveDraft();
     Object.assign(state.submission, R.newSubmission());
     state.queue = [state.submission];
     state.activeIdx = 0;
@@ -352,6 +353,7 @@
     wireTopbar();
     R.wireImport();
     R.wireQueueDrawer();
+    R.wireAutosave();
     el.initExportButton();
     R.renderAnnotationList();
     R.renderQueueDrawer();

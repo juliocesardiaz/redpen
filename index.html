@@ -34,12 +34,23 @@
       </span>
     </div>
     <div class="topbar-group topbar-right">
+      <span id="autosave-status" class="autosave-status" aria-live="polite" title="Autosave status"></span>
+      <button id="btn-backup-file" class="btn btn-small hidden" type="button" title="Choose a file on disk to keep in sync with your grading work">Enable backup file</button>
       <button id="btn-tags" class="btn" type="button">Tags</button>
       <button id="btn-export" class="btn btn-primary" type="button" >Export HTML</button>
       <button id="btn-export-all" class="btn" type="button" disabled title="Import a folder to enable batch export">Export all</button>
       <button id="btn-new" class="btn" type="button">New</button>
     </div>
   </header>
+
+  <!-- Autosave restore banner. Shown on load if a saved draft exists. -->
+  <div id="restore-banner" class="restore-banner hidden" role="status" aria-live="polite">
+    <span id="restore-banner-msg" class="restore-banner-msg"></span>
+    <span class="restore-banner-actions">
+      <button id="restore-banner-restore" class="btn btn-small btn-primary" type="button">Restore</button>
+      <button id="restore-banner-discard" class="btn btn-small" type="button">Discard</button>
+    </span>
+  </div>
 
   <main class="workspace">
     <section class="code-column" aria-label="Code">
@@ -217,18 +228,31 @@
         document.head.appendChild(s2);
 
         // JSZip is sanctioned only for batch export. Soft-fail if absent —
-        // app.js disables #btn-export-all if window.JSZip is missing.
+        // the import module disables #btn-export-all if window.JSZip is missing.
         var sz = document.createElement('script');
         sz.src = 'vendor/jszip.min.js';
         sz.async = false;
         sz.defer = false;
         document.head.appendChild(sz);
 
-        var s = document.createElement('script');
-        s.src = 'app.js';
-        s.async = false;
-        s.defer = false;
-        document.head.appendChild(s);
+        // Author-mode modules, loaded in dependency order: core sets up the
+        // window.Redpen namespace; autosave must precede main so R.wireAutosave
+        // exists when main's init() runs.
+        var authorFiles = [
+          'redpen-author-core.js',
+          'redpen-author-import.js',
+          'redpen-author-comments.js',
+          'redpen-author-tags.js',
+          'redpen-author-autosave.js',
+          'redpen-author-main.js',
+        ];
+        authorFiles.forEach(function (src) {
+          var s = document.createElement('script');
+          s.src = src;
+          s.async = false;
+          s.defer = false;
+          document.head.appendChild(s);
+        });
       }
     })();
   </script>

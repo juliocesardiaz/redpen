@@ -117,6 +117,7 @@
       state.submission = state.queue[0];
       loadSubmissionIntoUI();
       checkDuplicates();
+      R.scheduleAutosave();
       return;
     }
     state.queue.push.apply(state.queue, submissions);
@@ -124,6 +125,7 @@
     renderQueueDrawer();
     updateQueueCounter();
     updateExportAllButton();
+    R.scheduleAutosave();
   }
 
   function checkDuplicates() {
@@ -147,6 +149,7 @@
     state.activeIdx = idx;
     state.submission = state.queue[idx];
     loadSubmissionIntoUI();
+    R.scheduleAutosave();
   }
 
   function loadSubmissionIntoUI() {
@@ -371,6 +374,7 @@
   R.renderQueueDrawer = renderQueueDrawer;
   R.updateQueueCounter = updateQueueCounter;
   R.updateExportAllButton = updateExportAllButton;
+  R.loadSubmissionIntoUI = loadSubmissionIntoUI;
   R.wireImport = wireImport;
   R.wireQueueDrawer = wireQueueDrawer;
 })();

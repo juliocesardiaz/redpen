@@ -76,6 +76,12 @@ window.Redpen = {};
     queueDrawerHandle: document.getElementById('queue-drawer-handle'),
     queueList: document.getElementById('queue-list'),
     queueCount: document.getElementById('queue-count'),
+    autosaveStatus: document.getElementById('autosave-status'),
+    btnBackupFile: document.getElementById('btn-backup-file'),
+    restoreBanner: document.getElementById('restore-banner'),
+    restoreBannerMsg: document.getElementById('restore-banner-msg'),
+    restoreBannerRestore: document.getElementById('restore-banner-restore'),
+    restoreBannerDiscard: document.getElementById('restore-banner-discard'),
   };
   R.el = el;
 
@@ -474,7 +480,7 @@ window.Redpen = {};
     const normalized = (raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     if (!normalized.trim()) return false;
     state.submission.code = normalized;
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     renderCodeView();
     showRenderedView();
     return true;
@@ -492,7 +498,7 @@ window.Redpen = {};
     R.closeTooltip();
     el.codeInput.value = state.submission.code;
     state.submission.code = '';
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     showEmptyView();
   }
 
@@ -505,6 +511,7 @@ window.Redpen = {};
 
   R.uuid = uuid;
   R.newSubmission = newSubmission;
+  R.defaultTags = defaultTags;
   R.findNameInCsv = findNameInCsv;
   R.getAnnotationById = getAnnotationById;
   R.getTagById = getTagById;

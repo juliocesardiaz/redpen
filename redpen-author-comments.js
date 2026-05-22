@@ -589,7 +589,7 @@
       a.tagIds = tagIds;
     }
 
-    state.submission.updatedAt = now;
+    R.markDirty();
     closeCommentModal();
     closeTooltip();
     hideCommentButton();
@@ -606,7 +606,7 @@
     if (!ok) return;
     const id = state.editingAnnotationId;
     state.submission.annotations = state.submission.annotations.filter(function (a) { return a.id !== id; });
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     closeCommentModal();
     closeTooltip();
     R.renderCodeView();
@@ -618,7 +618,7 @@
     const ok = window.confirm('Delete this annotation?');
     if (!ok) return;
     state.submission.annotations = state.submission.annotations.filter(function (a) { return a.id !== id; });
-    state.submission.updatedAt = Date.now();
+    R.markDirty();
     if (el.tooltip.dataset.annotationId === id) closeTooltip();
     R.renderCodeView();
     renderAnnotationList();
