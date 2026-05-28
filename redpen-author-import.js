@@ -289,6 +289,7 @@
     el.queueDrawerHandle.addEventListener('click', function () {
       const collapsed = el.queueDrawer.classList.toggle('collapsed');
       el.queueDrawerHandle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      document.body.classList.toggle('queue-open', !collapsed);
     });
     el.queueList.addEventListener('click', function (e) {
       const item = e.target.closest('.queue-item');
