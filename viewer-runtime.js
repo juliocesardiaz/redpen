@@ -15,7 +15,18 @@
     });
   }
 
-  // Same as author mode
+  // Aliases map user-written fence languages onto hljs grammar names. Any
+  // language not listed (and any unknown name) falls back to plain monospace.
+  // 'html' aliases to 'xml' — hljs ships HTML as its xml grammar, so a ```html
+  // fence would otherwise silently render unhighlighted.
+  const MD_LANG_ALIAS = {
+    python: 'python', py: 'python',
+    javascript: 'javascript', js: 'javascript',
+    html: 'xml', xml: 'xml',
+    css: 'css',
+    diff: 'diff', patch: 'diff',
+  };
+
   function renderMarkdown(source) {
     if (!source) return '';
     if (typeof source !== 'string') {
@@ -38,9 +49,12 @@
           if (codeLang) out += '<span class="md-code-lang">' + escapeHtml(codeLang) + '</span>';
           out += '<button class="md-code-copy" type="button" aria-label="Copy code">Copy</button>';
           out += '<pre class="md-code-pre"><code class="hljs ' + escapeAttr(codeLang) + '">';
-          if (window.hljs && codeLang) {
+          const hljsLang = MD_LANG_ALIAS[codeLang];
+          const hasGrammar = hljsLang && window.hljs &&
+            (window.hljs.getLanguage ? !!window.hljs.getLanguage(hljsLang) : true);
+          if (hasGrammar) {
             try {
-              out += window.hljs.highlight(codeBlock, { language: codeLang }).value;
+              out += window.hljs.highlight(codeBlock, { language: hljsLang, ignoreIllegals: true }).value;
             } catch (e) {
               out += escapeHtml(codeBlock);
             }
@@ -88,8 +102,11 @@
     out = out.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
     // `code`
     out = out.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
-    // [text](url)
-    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // [text](url) — function-form replace so a URL containing $&, $1, or $$
+    // can't be interpreted by the replacement-string mini-language.
+    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_m, label, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+    });
     return out;
   }
 
