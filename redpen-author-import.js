@@ -324,23 +324,23 @@
       return;
     }
     if (state.queue.length <= 1) return;
-    const originalIdx = state.activeIdx;
     const entries = [];
     const failures = [];
+    // Detached <code> element used as the off-screen render target. Reused
+    // across the loop — innerHTML is overwritten each iteration. The visible
+    // UI is no longer cycled through every submission.
+    const offscreen = document.createElement('code');
     for (let i = 0; i < state.queue.length; i++) {
-      setActive(i);
-      // Yield once so the synchronous DOM commits land before we read
-      // #code-lines.innerHTML inside buildExportHtml.
-      await Promise.resolve();
+      const s = state.queue[i];
       try {
-        const html = window.buildExportHtml(state.queue[i]);
-        const filename = window.slugForSubmission(state.queue[i]) + '.html';
+        R.renderCodeView(offscreen, s);
+        const html = window.buildExportHtml(s, offscreen.innerHTML);
+        const filename = window.slugForSubmission(s) + '.html';
         entries.push({ filename: filename, html: html });
       } catch (err) {
-        failures.push({ idx: i, name: displayLabel(state.queue[i]), error: err.message });
+        failures.push({ idx: i, name: displayLabel(s), error: err.message });
       }
     }
-    setActive(originalIdx);
     if (entries.length === 0) {
       alert('No submissions exported. Issues:\n' + failures.map(function (f) { return '- ' + f.name + ': ' + f.error; }).join('\n'));
       return;

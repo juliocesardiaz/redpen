@@ -9,11 +9,10 @@
   // export wraps with alert+download; batch export aggregates throws into a
   // failure summary.
   //
-  // Batch export drives this through the live #code-lines element rather than
-  // rendering off-screen — rendering currently has DOM-only side effects
-  // (line wrappers, annotation overlays). A non-DOM render path is a larger
-  // refactor; revisit if export-all becomes a hot path.
-  function buildExportHtml(submission) {
+  // Callers may pass `codeHtml` directly (the innerHTML of a <code> element
+  // already populated by R.renderCodeView, possibly off-screen). When omitted,
+  // we read the live #code-lines, which is the single-submission UI path.
+  function buildExportHtml(submission, codeHtml) {
     if (!submission.studentName || !submission.assignmentName) {
       throw new Error('Add a student name and assignment name before exporting');
     }
@@ -29,8 +28,10 @@
     const hljsMain = A.hljsMain;
     const hljsDiff = A.hljsDiff;
 
-    const codeLinesEl = document.getElementById('code-lines');
-    let codeHtml = codeLinesEl ? codeLinesEl.innerHTML : '';
+    if (codeHtml === undefined) {
+      const codeLinesEl = document.getElementById('code-lines');
+      codeHtml = codeLinesEl ? codeLinesEl.innerHTML : '';
+    }
     if (!codeHtml || !codeHtml.trim()) {
       throw new Error('Export aborted: no rendered code found. Render the student\'s code before exporting.');
     }
