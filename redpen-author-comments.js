@@ -647,29 +647,8 @@
   // Tooltip (single instance; repositioned + repopulated per open)
   // ------------------------------------------------------------------
 
-  /**
-   * Resolve a click inside the code view to the annotation whose tooltip
-   * should show. Innermost-wins: we climb from event.target looking for the
-   * nearest [data-annotation-id]. If the click landed on line-content with no
-   * annotation span ancestor (e.g., trailing whitespace or an empty line
-   * inside a block range) we fall back to the smallest line-level annotation
-   * tagged on that row.
-   */
   function resolveAnnotationForClick(target) {
-    let node = target;
-    while (node && node !== el.codeLines) {
-      if (node.dataset && node.dataset.annotationId) return { id: node.dataset.annotationId, anchor: node };
-      node = node.parentElement;
-    }
-    // Line-level fallback
-    let lineEl = target;
-    while (lineEl && lineEl !== el.codeLines && !(lineEl.classList && lineEl.classList.contains('line'))) {
-      lineEl = lineEl.parentElement;
-    }
-    if (lineEl && lineEl.dataset && lineEl.dataset.lineLevelAnnotationId) {
-      return { id: lineEl.dataset.lineLevelAnnotationId, anchor: lineEl.querySelector('.line-content') || lineEl };
-    }
-    return null;
+    return window.RedpenShared.resolveAnnotationFromTarget(target, el.codeLines);
   }
 
   function openTooltip(annotationId, anchorEl) {
@@ -678,7 +657,7 @@
     renderTooltipContent(annotation);
     el.tooltip.dataset.annotationId = annotationId;
     el.tooltip.classList.remove('hidden');
-    positionTooltip(anchorEl);
+    window.RedpenShared.positionTooltip(el.tooltip, anchorEl);
   }
 
   function closeTooltip() {
@@ -715,68 +694,6 @@
     }
   }
 
-  function positionTooltip(anchorEl) {
-    const tt = el.tooltip;
-    // Park off-screen to measure width/height at current content.
-    tt.style.left = '-9999px';
-    tt.style.top = '-9999px';
-    tt.style.maxHeight = '';
-    // Force layout by reading size.
-    const ttW = tt.offsetWidth;
-    const ttH = tt.offsetHeight;
-
-    // For line-level annotations (line-range / block), the "anchor" may be
-    // the whole .line-content. Use the first visible rect of the anchor —
-    // placing the tooltip directly below the start of that element is the
-    // most readable choice.
-    const rects = anchorEl.getClientRects ? anchorEl.getClientRects() : [];
-    const rect = rects.length > 0 ? rects[0] : anchorEl.getBoundingClientRect();
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const margin = 8;
-    const gap = 10;
-    const mobile = vw < 560;
-
-    let left;
-    let top;
-    let placement = 'below';
-
-    if (mobile) {
-      // Span 90vw, centred horizontally, below the anchor.
-      const target = Math.min(ttW, Math.floor(vw * 0.9));
-      left = Math.max(margin, Math.floor((vw - target) / 2));
-    } else {
-      left = rect.left;
-    }
-
-    top = rect.bottom + gap;
-    if (top + ttH > vh - margin) {
-      const above = rect.top - gap - ttH;
-      if (above >= margin) { top = above; placement = 'above'; }
-      else {
-        // Not enough room either way — keep below but cap height with scroll.
-        tt.style.maxHeight = (vh - top - margin) + 'px';
-      }
-    }
-
-    const maxLeft = vw - margin - ttW;
-    if (left > maxLeft) left = Math.max(margin, maxLeft);
-    if (left < margin) left = margin;
-
-    tt.style.left = left + 'px';
-    tt.style.top = top + 'px';
-    tt.dataset.placement = placement;
-
-    // Position arrow horizontally under the anchor's mid-point, clamped so
-    // it never runs off the tooltip's rounded corners.
-    const arrow = tt.querySelector('.tooltip-arrow');
-    const anchorMid = rect.left + rect.width / 2;
-    const rawX = anchorMid - left;
-    const arrowX = Math.max(18, Math.min(ttW - 18, rawX));
-    arrow.style.left = arrowX + 'px';
-  }
-
   function repositionTooltipIfOpen() {
     if (el.tooltip.classList.contains('hidden')) return;
     const id = el.tooltip.dataset.annotationId;
@@ -784,7 +701,7 @@
     // Re-anchor on the first span that still matches this annotation id.
     const anchor = el.codeLines.querySelector('[data-annotation-id="' + R.cssEscape(id) + '"]');
     if (!anchor) { closeTooltip(); return; }
-    positionTooltip(anchor);
+    window.RedpenShared.positionTooltip(el.tooltip, anchor);
   }
 
   // ------------------------------------------------------------------
