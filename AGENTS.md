@@ -25,9 +25,22 @@ These are non-negotiable. Push back on the user before breaking any of them.
 ```
 index.html              Author-mode shell. Loads scripts in order:
                         viewer-assets.js → viewer-runtime.js → exporter.js →
-                        vendor/jszip.min.js → app.js
-app.js                  Author-mode logic — state, rendering, selection, modals,
-                        annotation CRUD. Single IIFE, ~1900 lines.
+                        vendor/jszip.min.js → the six author-mode modules.
+redpen-author-core.js   Author-mode module 1/6. Creates window.Redpen, the
+                        shared state object, the el DOM-ref table, model
+                        helpers, code rendering, view swaps.
+redpen-author-import.js Author-mode module 2/6. Multi-submission queue,
+                        folder/CSV import, queue drawer, batch export.
+redpen-author-comments.js  Author-mode module 3/6. Selection → range, the
+                        comment modal (incl. diff suggestion), tooltip, the
+                        sidebar annotation list.
+redpen-author-tags.js   Author-mode module 4/6. Tag chips in the modal,
+                        standalone tag manager, primary tag lookup.
+redpen-author-autosave.js  Author-mode module 5/6. Debounced localStorage
+                        autosave, opt-in File System Access backup file,
+                        restore banner. Must load before main.
+redpen-author-main.js   Author-mode module 6/6. Metadata input wiring, overall
+                        comment preview, "New" reset, init() boot.
 styles.css              Author-mode styles only. Viewer styles live separately.
 exporter.js             Builds the exported HTML string from `submission` +
                         live `#code-lines` innerHTML, then triggers download.
@@ -69,9 +82,18 @@ assets/logo.png         Brand asset for the README only.
 
 If you find yourself creating a `patch_*.js` file, stop and integrate the change into the main file instead.
 
+### Author-mode module contract
+
+All six author files share state through `window.Redpen` (referenced as `R`):
+
+- `R.state` holds every cross-file mutable: `submission`, `queue`, `activeIdx`, `csvRows`, `sourceLines`, selection/edit drafts, `modalView`, `overallView`. Files mutate properties (`R.state.queue = ...`) — a module-scope `let` would not cross `<script>` boundaries.
+- `R.el` is the shared DOM-ref table (built in `redpen-author-core.js`).
+- Cross-file calls go through `R.` (e.g. `R.renderCodeView()`); within-file calls stay bare.
+- Each file is its own IIFE under `'use strict'`. There is no build step; load order is enforced by index.html's script loader.
+
 ## Data model
 
-Defined implicitly in `app.js:newSubmission()`:
+Defined in `redpen-author-core.js:newSubmission()`:
 
 ```
 Submission {
@@ -99,7 +121,7 @@ Tag     { id, label, color }                   // color is CSS hex
 
 ## How export actually works (read this before editing exporter.js)
 
-1. Author mode renders the code into `#code-lines` with `<span class="annotation" data-annotation-id="...">` wrappers and `<span class="line" data-line="N">` rows. `splitHighlightedByLines` (`app.js:167`) preserves hljs token spans across line boundaries; `wrapColumnRange` (`app.js:333`) inserts annotation wrappers at column boundaries.
+1. Author mode renders the code into `#code-lines` with `<span class="annotation" data-annotation-id="...">` wrappers and `<span class="line" data-line="N">` rows. `splitHighlightedByLines` (in `redpen-author-core.js`) preserves hljs token spans across line boundaries; `wrapColumnRange` (same file) inserts annotation wrappers at column boundaries.
 2. `exportSubmission(submission)` (`exporter.js:6`) reads `#code-lines.innerHTML` directly. If it's empty, abort with an alert — silent empty exports are a regression.
 3. The exporter post-processes that HTML to insert `<sup class="annotation-sup">` markers, exactly once per annotation (the first segment in document order — multi-line ranges produce multiple sibling `.annotation` spans).
 4. Print-mode footnotes are generated from `submission.annotations` in the same numeric order.

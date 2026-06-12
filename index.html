@@ -228,18 +228,31 @@
         document.head.appendChild(s2);
 
         // JSZip is sanctioned only for batch export. Soft-fail if absent —
-        // app.js disables #btn-export-all if window.JSZip is missing.
+        // the import module disables #btn-export-all if window.JSZip is missing.
         var sz = document.createElement('script');
         sz.src = 'vendor/jszip.min.js';
         sz.async = false;
         sz.defer = false;
         document.head.appendChild(sz);
 
-        var s = document.createElement('script');
-        s.src = 'app.js';
-        s.async = false;
-        s.defer = false;
-        document.head.appendChild(s);
+        // Author-mode modules, loaded in dependency order: core sets up the
+        // window.Redpen namespace; autosave loads before main so R.wireAutosave
+        // exists when main's init() runs.
+        var authorFiles = [
+          'redpen-author-core.js',
+          'redpen-author-import.js',
+          'redpen-author-comments.js',
+          'redpen-author-tags.js',
+          'redpen-author-autosave.js',
+          'redpen-author-main.js',
+        ];
+        authorFiles.forEach(function (src) {
+          var s = document.createElement('script');
+          s.src = src;
+          s.async = false;
+          s.defer = false;
+          document.head.appendChild(s);
+        });
       }
     })();
   </script>
