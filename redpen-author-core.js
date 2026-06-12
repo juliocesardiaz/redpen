@@ -267,95 +267,118 @@ window.Redpen = {};
     return lines;
   }
 
-  function renderCodeView() {
-    const code = state.submission.code;
+  /**
+   * Render a submission's code into a <code> element. Defaults to the live
+   * #code-lines and the active submission — the original behaviour.
+   *
+   * Passing an explicit `target` element (typically a detached <code>) and a
+   * non-active `submission` lets callers render off-screen without disturbing
+   * the visible UI. Batch export uses this to avoid cycling the active queue
+   * item per submission. For off-screen renders we still need state.submission
+   * to point at the rendered submission for the duration of the render (so
+   * primaryTagForAnnotation / getTagById resolve against the right tag set),
+   * but we swap it back synchronously when the render returns.
+   */
+  function renderCodeView(target, submission) {
+    target = target || el.codeLines;
+    submission = submission || state.submission;
+    const isLive = target === el.codeLines;
+    const code = submission.code;
     if (!code) {
-      el.codeLines.innerHTML = '';
-      state.sourceLines = [];
+      target.innerHTML = '';
+      if (isLive) state.sourceLines = [];
       return;
     }
-    state.sourceLines = code.split('\n');
-    const lineHtmls = highlightByLines(code, state.submission.language);
+    const sourceLines = code.split('\n');
+    if (isLive) state.sourceLines = sourceLines;
 
-    // Apply annotation wrappers per line. Widest first so the bigger range
-    // becomes the outer <span> and smaller ranges nest inside it — this is
-    // what makes the innermost (most specific) annotation win on click,
-    // since inner DOM elements receive the event first. On ties we put
-    // block > line-range > span (i.e., a span that happens to cover a full
-    // line still nests *inside* a block / line-range on the same line,
-    // otherwise clicking the span would resolve to the line-level annotation).
-    const annotationsByLine = indexAnnotationsByLine(state.submission.annotations, state.sourceLines.length);
+    const savedSubmission = state.submission;
+    state.submission = submission;
+    try {
+      const lineHtmls = highlightByLines(code, submission.language);
 
-    const TYPE_RANK = { block: 2, 'line-range': 1, span: 0 };
-    const frag = document.createDocumentFragment();
-    for (let i = 0; i < lineHtmls.length; i++) {
-      let lineHtml = lineHtmls[i];
-      const lineNum = i + 1;
-      const lineLen = state.sourceLines[i].length;
-      const wraps = (annotationsByLine[lineNum] || [])
-        .map(function (a) {
-          const r = colRangeOnLine(a, lineNum, lineLen);
-          return { annotation: a, startCol: r[0], endCol: r[1], width: r[1] - r[0] };
-        })
-        .filter(function (w) { return w.width > 0; });
-      wraps.sort(function (x, y) {
-        if (y.width !== x.width) return y.width - x.width;
-        return (TYPE_RANK[y.annotation.type] || 0) - (TYPE_RANK[x.annotation.type] || 0);
-      });
+      // Apply annotation wrappers per line. Widest first so the bigger range
+      // becomes the outer <span> and smaller ranges nest inside it — this is
+      // what makes the innermost (most specific) annotation win on click,
+      // since inner DOM elements receive the event first. On ties we put
+      // block > line-range > span (i.e., a span that happens to cover a full
+      // line still nests *inside* a block / line-range on the same line,
+      // otherwise clicking the span would resolve to the line-level annotation).
+      const annotationsByLine = indexAnnotationsByLine(submission.annotations, sourceLines.length);
 
-      // Line/block flags are computed from the *unfiltered* list so an empty
-      // line in the middle of a multi-line range still renders the wash and
-      // border — width-0 wraps get filtered out above but the line itself is
-      // still inside the annotation.
-      let hasLineRange = false;
-      let hasBlock = false;
-      let smallestLineLevel = null;
-      let smallestLineLevelWidth = Infinity;
-      for (const a of annotationsByLine[lineNum] || []) {
-        if (a.type !== 'line-range' && a.type !== 'block') continue;
-        if (a.type === 'line-range') hasLineRange = true;
-        if (a.type === 'block') hasBlock = true;
-        const coverage = (a.range.endLine - a.range.startLine + 1);
-        if (coverage < smallestLineLevelWidth) {
-          smallestLineLevelWidth = coverage;
-          smallestLineLevel = a;
+      const TYPE_RANK = { block: 2, 'line-range': 1, span: 0 };
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < lineHtmls.length; i++) {
+        let lineHtml = lineHtmls[i];
+        const lineNum = i + 1;
+        const lineLen = sourceLines[i].length;
+        const wraps = (annotationsByLine[lineNum] || [])
+          .map(function (a) {
+            const r = colRangeOnLine(a, lineNum, lineLen);
+            return { annotation: a, startCol: r[0], endCol: r[1], width: r[1] - r[0] };
+          })
+          .filter(function (w) { return w.width > 0; });
+        wraps.sort(function (x, y) {
+          if (y.width !== x.width) return y.width - x.width;
+          return (TYPE_RANK[y.annotation.type] || 0) - (TYPE_RANK[x.annotation.type] || 0);
+        });
+
+        // Line/block flags are computed from the *unfiltered* list so an empty
+        // line in the middle of a multi-line range still renders the wash and
+        // border — width-0 wraps get filtered out above but the line itself is
+        // still inside the annotation.
+        let hasLineRange = false;
+        let hasBlock = false;
+        let smallestLineLevel = null;
+        let smallestLineLevelWidth = Infinity;
+        for (const a of annotationsByLine[lineNum] || []) {
+          if (a.type !== 'line-range' && a.type !== 'block') continue;
+          if (a.type === 'line-range') hasLineRange = true;
+          if (a.type === 'block') hasBlock = true;
+          const coverage = (a.range.endLine - a.range.startLine + 1);
+          if (coverage < smallestLineLevelWidth) {
+            smallestLineLevelWidth = coverage;
+            smallestLineLevel = a;
+          }
         }
-      }
-      for (const w of wraps) {
-        const a = w.annotation;
-        const tag = R.primaryTagForAnnotation(a);
-        const style = tag ? ' style="--hl:' + window.RedpenShared.escapeAttr(tag.color) + '"' : '';
-        const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '"' + style + '>';
-        lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
-      }
+        for (const w of wraps) {
+          const a = w.annotation;
+          const tag = R.primaryTagForAnnotation(a);
+          const style = tag ? ' style="--hl:' + window.RedpenShared.escapeAttr(tag.color) + '"' : '';
+          const openTag = '<span class="annotation annotation-' + a.type + '" data-annotation-id="' + a.id + '"' + style + '>';
+          lineHtml = wrapColumnRange(lineHtml, w.startCol, w.endCol, openTag, '</span>');
+        }
 
-      const row = document.createElement('div');
-      row.className = 'line';
-      if (hasLineRange) row.classList.add('has-line-range');
-      if (hasBlock) row.classList.add('has-block');
-      // Smallest line-level annotation on this line is used as the fallback
-      // click target when the user clicks line-content outside any inner span
-      // (e.g., trailing whitespace or an empty line inside a block range).
-      // Its first tag's color also drives this line's wash/border.
-      if (smallestLineLevel) {
-        row.dataset.lineLevelAnnotationId = smallestLineLevel.id;
-        const tag = R.primaryTagForAnnotation(smallestLineLevel);
-        if (tag) row.style.setProperty('--hl', tag.color);
+        const row = document.createElement('div');
+        row.className = 'line';
+        if (hasLineRange) row.classList.add('has-line-range');
+        if (hasBlock) row.classList.add('has-block');
+        // Smallest line-level annotation on this line is used as the fallback
+        // click target when the user clicks line-content outside any inner span
+        // (e.g., trailing whitespace or an empty line inside a block range).
+        // Its first tag's color also drives this line's wash/border.
+        if (smallestLineLevel) {
+          row.dataset.lineLevelAnnotationId = smallestLineLevel.id;
+          const tag = R.primaryTagForAnnotation(smallestLineLevel);
+          if (tag) row.style.setProperty('--hl', tag.color);
+        }
+        row.dataset.line = String(i + 1);
+        const gutter = document.createElement('span');
+        gutter.className = 'line-number';
+        gutter.textContent = String(i + 1);
+        const content = document.createElement('span');
+        content.className = 'line-content';
+        // Empty lines need a zero-width space so the row keeps its height.
+        content.innerHTML = lineHtml === '' ? '<span class="empty-placeholder">​</span>' : lineHtml;
+        row.appendChild(gutter);
+        row.appendChild(content);
+        frag.appendChild(row);
       }
-      row.dataset.line = String(i + 1);
-      const gutter = document.createElement('span');
-      gutter.className = 'line-number';
-      gutter.textContent = String(i + 1);
-      const content = document.createElement('span');
-      content.className = 'line-content';
-      // Empty lines need a zero-width space so the row keeps its height.
-      content.innerHTML = lineHtml === '' ? '<span class="empty-placeholder">​</span>' : lineHtml;
-      row.appendChild(gutter);
-      row.appendChild(content);
-      frag.appendChild(row);
+      target.innerHTML = '';
+      target.appendChild(frag);
+    } finally {
+      state.submission = savedSubmission;
     }
-    el.codeLines.innerHTML = '';
-    el.codeLines.appendChild(frag);
   }
 
   function indexAnnotationsByLine(annotations, lineCount) {

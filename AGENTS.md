@@ -131,7 +131,9 @@ Tag     { id, label, color }                   // color is CSS hex
 
 If you ever factor `exportSubmission` for batch use, it should return the HTML string and let a caller decide whether to download or zip it.
 
-As of the batch-export feature, that split exists: `buildExportHtml(submission): string` is the pure builder (throws on validation failures), and `exportSubmission(submission)` is a thin wrapper that handles alert + Blob download. `exportZipFromBuiltEntries(entries)` packages a list of `{filename, html}` into a JSZip blob and downloads it. Author mode also tracks a `queue: Submission[]` and an `activeIdx`; the live `#code-lines` element is the *only* rendering surface, so batch export iterates the queue by calling `setActive(i)` before each `buildExportHtml(queue[i])`, then restores the original active index. If you later want a headless renderer, factor `renderCodeView` against an arbitrary `<code>` element rather than the global `#code-lines`.
+As of the batch-export feature, that split exists: `buildExportHtml(submission, codeHtml?): string` is the pure builder (throws on validation failures), and `exportSubmission(submission)` is a thin wrapper that handles alert + Blob download. `exportZipFromBuiltEntries(entries)` packages a list of `{filename, html}` into a JSZip blob and downloads it.
+
+`R.renderCodeView(target?, submission?)` accepts an explicit `<code>` element and submission so callers can render off-screen without disturbing the visible UI. Batch export uses this: it creates one detached `<code>` element and reuses it across the queue, calling `R.renderCodeView(off, queue[i])` then `buildExportHtml(queue[i], off.innerHTML)`. The active queue index is never disturbed. When `target`/`submission` are omitted, the function renders the live `#code-lines` against `state.submission` — the original UI path.
 
 ## Viewer runtime contract
 
