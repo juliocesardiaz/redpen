@@ -21,6 +21,7 @@
   --code-font-size: 13px;
   --code-line-height: 1.55;
   --gutter-w: 48px;
+  --queue-drawer-w: 260px;
 }
 
 * { box-sizing: border-box; }
@@ -113,6 +114,12 @@ body {
 }
 
 .btn {
+  /* inline-flex rather than the <button> default so non-button elements
+     carrying this class (the Import folder / Names CSV <label>s) honor the
+     height and center their text like real buttons. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -148,6 +155,14 @@ body {
   grid-template-columns: minmax(0, 65%) minmax(0, 35%);
   min-height: 0;
   overflow: hidden;
+  transition: margin-left 200ms ease;
+}
+
+/* When the submissions drawer is expanded, give the workspace a left margin
+   equal to the drawer width so the fixed-position drawer doesn't overlap the
+   code column. The grid re-flows the columns against the reduced width. */
+body.queue-open .workspace {
+  margin-left: var(--queue-drawer-w);
 }
 
 .code-column {
@@ -1276,7 +1291,7 @@ body {
   top: var(--topbar-h);
   bottom: 0;
   left: 0;
-  width: 260px;
+  width: var(--queue-drawer-w);
   display: flex;
   background: var(--bg-muted);
   border-right: 1px solid var(--border-strong);
