@@ -1,10 +1,10 @@
 /* redpen — author mode: wiring + init
  *
  * Last author-mode file to load. Owns the metadata inputs, the overall-comment
- * preview, the markdown renderer used by author-side previews, all DOM event
- * wiring, "New" reset, and init() — which bootstraps the whole app once
- * highlight.js is available. See redpen-author-core.js for the shared
- * namespace contract.
+ * preview, all DOM event wiring, "New" reset, and init() — which bootstraps
+ * the whole app once highlight.js is available. Markdown rendering lives in
+ * viewer-runtime.js (window.RedpenShared.renderMarkdown), shared with the
+ * exported viewer. See redpen-author-core.js for the shared namespace contract.
  */
 
 (function () {
@@ -91,67 +91,6 @@
       return;
     }
     el.overallPreview.innerHTML = window.RedpenShared.renderMarkdown(src);
-  }
-
-  // ------------------------------------------------------------------
-  // Markdown renderer (spec's supported subset, no library)
-  // ------------------------------------------------------------------
-
-  // Aliases map user-written fence languages onto hljs grammar names. Any
-  // language not listed falls back to plain monospace inside the <pre><code>.
-  const MD_LANG_ALIAS = {
-    python: 'python', py: 'python',
-    javascript: 'javascript', js: 'javascript',
-    html: 'xml', xml: 'xml',
-    css: 'css',
-    diff: 'diff', patch: 'diff',
-  };
-
-  /**
-   * Render a trusted-teacher-authored markdown string to HTML. Supported:
-   *   `code`               inline code
-   *   ```lang\n...\n```    fenced code block (syntax-highlighted when known)
-   *   **bold**
-   *   *italic*
-   *   - item (consecutive lines form one <ul>)
-   *   [label](url)
-   * Ordering matches the spec: extract fenced, extract inline, handle
-   * lists / paragraphs, apply inline rules, then restore placeholders last
-   * so code contents are never touched by the inline pass.
-   */
-  function applyInline(s) {
-    // Bold before italic so **word** isn't partially consumed by * rules.
-    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-    s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function (_m, label, url) {
-      return '<a href="' + window.RedpenShared.escapeAttr(url) + '" target="_blank" rel="noopener">' + label + '</a>';
-    });
-    return s;
-  }
-
-  function renderFencedBlock(block) {
-    const lang = block.lang || '';
-    const hljsLang = MD_LANG_ALIAS[lang];
-    let content;
-    let codeClass = '';
-    const hasGrammar = hljsLang && window.hljs &&
-      (window.hljs.getLanguage ? !!window.hljs.getLanguage(hljsLang) : true);
-    if (hasGrammar) {
-      try {
-        content = window.hljs.highlight(block.code, { language: hljsLang, ignoreIllegals: true }).value;
-        codeClass = ' class="hljs language-' + hljsLang + '"';
-      } catch (_) {
-        content = window.RedpenShared.escapeHtml(block.code);
-      }
-    } else {
-      content = window.RedpenShared.escapeHtml(block.code);
-    }
-    const label = lang ? '<span class="md-code-lang">' + window.RedpenShared.escapeHtml(lang) + '</span>' : '';
-    // Copy button reads the raw text from the <code> element at click time,
-    // so we don't need to round-trip the source through an attribute.
-    const copy = '<button type="button" class="md-code-copy" data-md-copy title="Copy code"><span class="md-copy-label">Copy</span></button>';
-    return '<div class="md-code-wrap">' + label + copy +
-      '<pre class="md-code-pre"><code' + codeClass + '>' + content + '</code></pre></div>';
   }
 
   // ------------------------------------------------------------------
@@ -426,9 +365,6 @@
   }
 
   R.setOverallView = setOverallView;
-  // applyInline + renderFencedBlock are not currently called — kept here as
-  // the per-file dead-code cleanup PR will remove them after harvesting their
-  // language-alias / escapeAttr improvements into RedpenShared.renderMarkdown.
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
