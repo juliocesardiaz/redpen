@@ -114,6 +114,12 @@ body {
 }
 
 .btn {
+  /* inline-flex rather than the <button> default so non-button elements
+     carrying this class (the Import folder / Names CSV <label>s) honor the
+     height and center their text like real buttons. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--border);
