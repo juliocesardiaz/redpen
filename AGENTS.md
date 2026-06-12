@@ -57,6 +57,12 @@ vendor/                 highlight.min.js, highlight-diff.min.js, highlight-theme
                         into the viewer.
 test_headed.py          Playwright smoke test. Loads index.html via a local
                         server on :3000, fills the form, renders, exports.
+                        Runs check_drift.py as a precondition.
+check_drift.py          Verifies the strings baked into viewer-assets.js
+                        still match their sources (viewer-runtime.js,
+                        viewer-template.html, the two hljs vendor files,
+                        the theme CSS). Exit 0 / 1. Run after any edit
+                        to those sources.
 README.md               User-facing overview.
 assets/logo.png         Brand asset for the README only.
 ```
@@ -118,7 +124,8 @@ As of the batch-export feature, that split exists: `buildExportHtml(submission):
 This is the only file that's awkward to edit and it has no automation:
 
 - `viewerCss` is a template literal — edit it directly like any CSS.
-- `template`, `themeCss`, `viewerRuntime`, `hljsMain`, `hljsDiff` are JSON-escaped strings. When you change `viewer-template.html`, `viewer-runtime.js`, `vendor/highlight-theme.css`, `vendor/highlight.min.js`, or `vendor/highlight-diff.min.js`, you must re-paste a JSON-escaped copy into the matching slot. Easiest path: `JSON.stringify(fs.readFileSync(path, 'utf8'))` in a one-off node REPL, then paste the result.
+- `template`, `themeCss`, `viewerRuntime`, `hljsMain`, `hljsDiff` are JSON-escaped strings. When you change `viewer-template.html`, `viewer-runtime.js`, `vendor/highlight-theme.css`, `vendor/highlight.min.js`, or `vendor/highlight-diff.min.js`, you must re-paste a JSON-escaped copy into the matching slot. Easiest path: `python3 -c "import json; print(json.dumps(open('PATH').read()))"`, then paste the result.
+- After any such edit, run `python3 check_drift.py` to confirm the embedded copy matches the source. The smoke test runs it automatically.
 - Don't add a build script to "fix" this — the teacher explicitly removed it.
 
 ## Testing

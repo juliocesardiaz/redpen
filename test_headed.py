@@ -1,5 +1,17 @@
 from playwright.sync_api import sync_playwright
 import os
+import subprocess
+import sys
+
+def check_drift():
+    # Fail fast if viewer-assets.js has drifted from its sources — the
+    # exported viewer would otherwise pick up the embedded copy and the
+    # smoke test would silently exercise stale code.
+    result = subprocess.run([sys.executable, "check_drift.py"],
+                            cwd=os.path.dirname(os.path.abspath(__file__)))
+    if result.returncode != 0:
+        sys.exit(result.returncode)
+
 
 def run_cuj(page):
     page.goto("http://localhost:3000/index.html")
@@ -31,6 +43,7 @@ def run_cuj(page):
     page.wait_for_timeout(1000)
 
 if __name__ == "__main__":
+    check_drift()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
