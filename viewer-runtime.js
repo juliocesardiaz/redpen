@@ -110,11 +110,116 @@
     return out;
   }
 
+  // ------------------------------------------------------------------
+  // Shared tooltip helpers (used by both author mode and the viewer)
+  // ------------------------------------------------------------------
+
+  /**
+   * Position the tooltip element relative to its anchor. Author and viewer
+   * shared this responsibility but had drifted: the author version handled
+   * mobile centering, max-height capping when neither below/above fits, and
+   * arrow clamping; the viewer's simpler version meant students sometimes saw
+   * truncated tooltips. One copy, used by both.
+   */
+  function positionTooltip(tt, anchorEl) {
+    // Park off-screen to measure width/height at current content.
+    tt.style.left = '-9999px';
+    tt.style.top = '-9999px';
+    tt.style.maxHeight = '';
+    // Force layout by reading size.
+    const ttW = tt.offsetWidth;
+    const ttH = tt.offsetHeight;
+
+    // For line-level annotations (line-range / block), the "anchor" may be
+    // the whole .line-content. Use the first visible rect of the anchor —
+    // placing the tooltip directly below the start of that element is the
+    // most readable choice.
+    const rects = anchorEl.getClientRects ? anchorEl.getClientRects() : [];
+    const rect = rects.length > 0 ? rects[0] : anchorEl.getBoundingClientRect();
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+    const gap = 10;
+    const mobile = vw < 560;
+
+    let left;
+    let top;
+    let placement = 'below';
+
+    if (mobile) {
+      // Span 90vw, centred horizontally, below the anchor.
+      const target = Math.min(ttW, Math.floor(vw * 0.9));
+      left = Math.max(margin, Math.floor((vw - target) / 2));
+    } else {
+      left = rect.left;
+    }
+
+    top = rect.bottom + gap;
+    if (top + ttH > vh - margin) {
+      const above = rect.top - gap - ttH;
+      if (above >= margin) { top = above; placement = 'above'; }
+      else {
+        // Not enough room either way — keep below but cap height with scroll.
+        tt.style.maxHeight = (vh - top - margin) + 'px';
+      }
+    }
+
+    const maxLeft = vw - margin - ttW;
+    if (left > maxLeft) left = Math.max(margin, maxLeft);
+    if (left < margin) left = margin;
+
+    tt.style.left = left + 'px';
+    tt.style.top = top + 'px';
+    tt.dataset.placement = placement;
+
+    // Position arrow horizontally under the anchor's mid-point, clamped so
+    // it never runs off the tooltip's rounded corners.
+    const arrow = tt.querySelector('.tooltip-arrow');
+    if (arrow) {
+      const anchorMid = rect.left + rect.width / 2;
+      const rawX = anchorMid - left;
+      const arrowX = Math.max(18, Math.min(ttW - 18, rawX));
+      arrow.style.left = arrowX + 'px';
+    }
+  }
+
+  /**
+   * Resolve a click/hover anywhere inside the code view to its annotation.
+   * Innermost wins: climb from the target looking for [data-annotation-id].
+   * If none found (e.g., the user clicked the line-range/block wash to the
+   * right of all text, or on trailing whitespace) fall back to the .line
+   * row's data-line-level-annotation-id, which the author-mode renderer
+   * baked in for exactly this case.
+   */
+  function resolveAnnotationFromTarget(target, codeRoot) {
+    let node = target;
+    while (node && node !== codeRoot) {
+      if (node.dataset && node.dataset.annotationId) {
+        return { id: node.dataset.annotationId, anchor: node };
+      }
+      node = node.parentElement;
+    }
+    let lineEl = target;
+    while (lineEl && lineEl !== codeRoot && !(lineEl.classList && lineEl.classList.contains('line'))) {
+      lineEl = lineEl.parentElement;
+    }
+    if (lineEl && lineEl.dataset && lineEl.dataset.lineLevelAnnotationId) {
+      return {
+        id: lineEl.dataset.lineLevelAnnotationId,
+        anchor: lineEl.querySelector('.line-content') || lineEl,
+      };
+    }
+    return null;
+  }
+
   // Expose to window for author mode to use as well
   window.RedpenShared = {
     escapeHtml: escapeHtml,
     escapeAttr: escapeAttr,
-    renderMarkdown: renderMarkdown
+    renderMarkdown: renderMarkdown,
+    positionTooltip: positionTooltip,
+    resolveAnnotationFromTarget: resolveAnnotationFromTarget,
   };
 
   // ------------------------------------------------------------------
@@ -204,73 +309,14 @@
     }
   }
 
-  function positionTooltip(targetEl) {
-    const tt = tooltip;
-    tt.classList.remove('hidden');
-
-    const targetRect = targetEl.getBoundingClientRect();
-    const ttRect = tt.getBoundingClientRect();
-
-    const padding = 12;
-    let top = targetRect.bottom + padding;
-    let placement = 'below';
-
-    if (top + ttRect.height > window.innerHeight && targetRect.top - ttRect.height - padding > 0) {
-      top = targetRect.top - ttRect.height - padding;
-      placement = 'above';
-    }
-
-    let left = targetRect.left;
-    if (left + ttRect.width > window.innerWidth - padding) {
-      left = window.innerWidth - ttRect.width - padding;
-    }
-    if (left < padding) {
-      left = padding;
-    }
-
-    tt.style.top = top + 'px';
-    tt.style.left = left + 'px';
-    tt.dataset.placement = placement;
-
-    const arrow = tt.querySelector('.tooltip-arrow');
-    if (arrow) {
-      let arrowLeft = targetRect.left + (targetRect.width / 2) - left;
-      if (arrowLeft < 16) arrowLeft = 16;
-      if (arrowLeft > ttRect.width - 16) arrowLeft = ttRect.width - 16;
-      arrow.style.left = arrowLeft + 'px';
-    }
+  function showTooltipAt(anchor) {
+    tooltip.classList.remove('hidden');
+    positionTooltip(tooltip, anchor);
   }
 
   function cssEscape(s) {
     if (window.CSS && CSS.escape) return CSS.escape(s);
     return String(s).replace(/"/g, '\\"');
-  }
-
-  // Resolve a click/hover anywhere inside the code view to its annotation.
-  // Innermost wins: climb from event.target looking for [data-annotation-id].
-  // If none found (e.g., the user clicked the line-range/block wash to the
-  // right of all text, or on trailing whitespace) fall back to the .line
-  // row's data-line-level-annotation-id, which the author-mode renderer
-  // baked in for exactly this case.
-  function resolveAnnotationFromTarget(target, codeView) {
-    let node = target;
-    while (node && node !== codeView) {
-      if (node.dataset && node.dataset.annotationId) {
-        return { id: node.dataset.annotationId, anchor: node };
-      }
-      node = node.parentElement;
-    }
-    let lineEl = target;
-    while (lineEl && lineEl !== codeView && !(lineEl.classList && lineEl.classList.contains('line'))) {
-      lineEl = lineEl.parentElement;
-    }
-    if (lineEl && lineEl.dataset && lineEl.dataset.lineLevelAnnotationId) {
-      return {
-        id: lineEl.dataset.lineLevelAnnotationId,
-        anchor: lineEl.querySelector('.line-content') || lineEl,
-      };
-    }
-    return null;
   }
 
   function wireAnnotations() {
@@ -286,7 +332,7 @@
       } else {
         tooltip.dataset.annotationId = hit.id;
         populateTooltip(hit.id);
-        positionTooltip(hit.anchor);
+        showTooltipAt(hit.anchor);
       }
     });
 
@@ -348,7 +394,7 @@
       const id = tooltip.dataset.annotationId;
       if (id) {
         const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) positionTooltip(hit);
+        if (hit) showTooltipAt(hit);
       }
     });
 
@@ -357,7 +403,7 @@
       const id = tooltip.dataset.annotationId;
       if (id) {
         const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) positionTooltip(hit);
+        if (hit) showTooltipAt(hit);
       }
     });
   }
