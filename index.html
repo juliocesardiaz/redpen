@@ -26,6 +26,7 @@
       <span class="import-group" aria-label="Import">
         <label class="btn btn-small" for="folder-input">Import folder</label>
         <input id="folder-input" class="hidden-input" type="file" webkitdirectory directory multiple />
+        <button id="btn-import-github" class="btn btn-small" type="button">Import from GitHub</button>
         <label id="csv-input-label" class="btn btn-small" for="csv-input" title="CSV columns: username,realname (header optional)">Names CSV</label>
         <input id="csv-input" class="hidden-input" type="file" accept=".csv,text/csv" />
         <button id="btn-prev" class="btn btn-small" type="button" aria-label="Previous submission" disabled>‹</button>
@@ -135,6 +136,31 @@
       <footer class="modal-footer">
         <span class="modal-footer-spacer"></span>
         <button id="tag-modal-close" class="btn btn-primary" type="button">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- GitHub import modal. Fetches one or more source files straight from
+       GitHub (public via raw.githubusercontent.com, private via a token
+       against the Contents API) and adds each as a queue submission. -->
+  <div id="github-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="github-modal-title">
+    <div class="modal github-modal">
+      <header class="modal-header">
+        <h2 id="github-modal-title" class="modal-title">Import from GitHub</h2>
+      </header>
+      <div class="modal-body">
+        <label class="field-label" for="github-urls">File URL(s), one per line</label>
+        <textarea id="github-urls" class="github-urls-input" rows="4"
+          placeholder="https://github.com/owner/repo/blob/main/path/to/file.py"></textarea>
+        <label class="field-label" for="github-token">Personal access token (optional, for private repos)</label>
+        <input id="github-token" class="meta-input github-token-input" type="password" autocomplete="off" placeholder="ghp_..." />
+        <p class="modal-hint">Paste a GitHub file URL (the "blob" link from the file view) or a raw.githubusercontent.com URL. The token is used only for this fetch and is never saved or exported.</p>
+        <p id="github-modal-status" class="github-modal-status" aria-live="polite"></p>
+      </div>
+      <footer class="modal-footer">
+        <span class="modal-footer-spacer"></span>
+        <button id="github-modal-cancel" class="btn" type="button">Cancel</button>
+        <button id="github-modal-import" class="btn btn-primary" type="button">Import</button>
       </footer>
     </div>
   </div>

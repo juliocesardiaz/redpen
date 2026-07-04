@@ -1,9 +1,9 @@
-/* redpen — author mode: queue + folder/CSV import
+/* redpen — author mode: queue + folder/CSV/GitHub import
  *
- * Owns the multi-submission queue: importing a folder of files, the optional
- * names CSV, switching between queue items, the queue drawer, navigation
- * arrows, and batch "Export all" via JSZip. See redpen-author-core.js for the
- * shared namespace contract.
+ * Owns the multi-submission queue: importing a folder of files, one or more
+ * files straight from GitHub, the optional names CSV, switching between
+ * queue items, the queue drawer, navigation arrows, and batch "Export all"
+ * via JSZip. See redpen-author-core.js for the shared namespace contract.
  */
 
 (function () {
@@ -60,6 +60,136 @@
     }
     if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
     return rows;
+  }
+
+  // ------------------------------------------------------------------
+  // GitHub import — fetch one or more source files straight from GitHub
+  // (public repos via raw.githubusercontent.com, private repos via a
+  // personal access token against the Contents API) and add each as a
+  // queue submission, the same way folder import does.
+  // ------------------------------------------------------------------
+
+  function parseGithubUrl(raw) {
+    const url = (raw || '').trim();
+    if (!url) return null;
+    const noHash = url.split('#')[0]; // drop a trailing #L12 / #L12-L34 anchor
+    let m = noHash.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/);
+    if (m) return { owner: m[1], repo: m[2], ref: m[3], path: m[4] };
+    m = noHash.match(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/);
+    if (m) return { owner: m[1], repo: m[2], ref: m[3], path: m[4] };
+    // Shorthand: "owner/repo/path/to/file.ext" with no ref — the ref is
+    // resolved against the repo's default branch when fetched.
+    m = noHash.match(/^(?:https?:\/\/github\.com\/)?([^\/\s]+)\/([^\/\s]+)\/(.+)$/);
+    if (m) return { owner: m[1], repo: m[2], ref: null, path: m[3] };
+    return null;
+  }
+
+  async function resolveDefaultRef(owner, repo, token) {
+    const headers = { Accept: 'application/vnd.github+json' };
+    if (token) headers.Authorization = 'token ' + token;
+    const res = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo), { headers: headers });
+    if (!res.ok) throw new Error('could not resolve default branch (HTTP ' + res.status + ')');
+    const json = await res.json();
+    return json.default_branch || 'main';
+  }
+
+  // loc.path is taken verbatim from the source URL (already percent-encoded
+  // where it came from a URL) so it's reused as-is when building the fetch
+  // URL rather than re-encoding it.
+  async function fetchGithubFileContent(loc, token) {
+    const ref = loc.ref || await resolveDefaultRef(loc.owner, loc.repo, token);
+    if (token) {
+      const apiUrl = 'https://api.github.com/repos/' + encodeURIComponent(loc.owner) + '/' + encodeURIComponent(loc.repo) +
+        '/contents/' + loc.path + '?ref=' + encodeURIComponent(ref);
+      const res = await fetch(apiUrl, {
+        headers: { Accept: 'application/vnd.github.raw+json', Authorization: 'token ' + token },
+      });
+      if (!res.ok) throw new Error('GitHub API error ' + res.status);
+      return await res.text();
+    }
+    const rawUrl = 'https://raw.githubusercontent.com/' + encodeURIComponent(loc.owner) + '/' + encodeURIComponent(loc.repo) +
+      '/' + encodeURIComponent(ref) + '/' + loc.path;
+    const res = await fetch(rawUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' — private repo? add a token');
+    return await res.text();
+  }
+
+  function githubFilenameParts(path) {
+    const decoded = path.split('/').map(decodeURIComponent).join('/');
+    const filename = decoded.slice(decoded.lastIndexOf('/') + 1);
+    const dot = filename.lastIndexOf('.');
+    const stem = dot > 0 ? filename.slice(0, dot) : filename;
+    const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
+    return { filename: filename, stem: stem, ext: ext };
+  }
+
+  async function makeSubmissionFromGithubUrl(url, token) {
+    const loc = parseGithubUrl(url);
+    if (!loc) throw new Error('not a recognized GitHub file URL');
+    const text = (await fetchGithubFileContent(loc, token)).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const parsed = githubFilenameParts(loc.path);
+    const s = R.newSubmission();
+    s._username = loc.owner;
+    s.studentName = R.findNameInCsv(loc.owner) || loc.owner;
+    s.assignmentName = loc.repo;
+    s.language = LANG_BY_EXT[parsed.ext] || state.submission.language;
+    s.code = text;
+    return s;
+  }
+
+  async function importFromGithub(urlsText, token) {
+    const lines = (urlsText || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    const built = [];
+    const failures = [];
+    for (const line of lines) {
+      try {
+        built.push(await makeSubmissionFromGithubUrl(line, token));
+      } catch (e) {
+        failures.push({ url: line, error: e.message });
+      }
+    }
+    if (built.length) appendToQueue(built);
+    return { built: built, failures: failures };
+  }
+
+  function openGithubModal() {
+    el.githubModalStatus.textContent = '';
+    el.githubModalBackdrop.classList.remove('hidden');
+    setTimeout(function () { el.githubUrls.focus(); }, 0);
+  }
+
+  function closeGithubModal() {
+    el.githubModalBackdrop.classList.add('hidden');
+    el.githubToken.value = ''; // never persist a pasted token past this dialog
+  }
+
+  async function runGithubImport() {
+    const urlsText = el.githubUrls.value;
+    if (!urlsText.trim()) {
+      el.githubModalStatus.textContent = 'Paste at least one GitHub file URL.';
+      return;
+    }
+    const token = el.githubToken.value.trim();
+    el.githubModalImport.disabled = true;
+    el.githubModalStatus.textContent = 'Importing…';
+    try {
+      const result = await importFromGithub(urlsText, token);
+      if (result.failures.length) {
+        el.githubModalStatus.textContent = 'Imported ' + result.built.length + ' / ' + (result.built.length + result.failures.length) + '. Failed:\n' +
+          result.failures.map(function (f) { return f.url + ' — ' + f.error; }).join('\n');
+        // Leave successfully-parsed lines out of the box, but keep failures so
+        // the teacher can fix and retry without retyping everything.
+        el.githubUrls.value = result.failures.map(function (f) { return f.url; }).join('\n');
+        el.githubToken.value = '';
+      } else {
+        closeGithubModal();
+        el.githubUrls.value = '';
+      }
+    } catch (e) {
+      el.githubModalStatus.textContent = 'Import failed: ' + e.message;
+    } finally {
+      el.githubModalImport.disabled = false;
+    }
   }
 
   function isPristineSubmission(s) {
@@ -286,6 +416,13 @@
     el.btnPrev.addEventListener('click', prevSubmission);
     el.btnNext.addEventListener('click', nextSubmission);
     el.btnExportAll.addEventListener('click', exportAll);
+
+    el.btnImportGithub.addEventListener('click', openGithubModal);
+    el.githubModalCancel.addEventListener('click', closeGithubModal);
+    el.githubModalImport.addEventListener('click', runGithubImport);
+    el.githubModalBackdrop.addEventListener('click', function (e) {
+      if (e.target === el.githubModalBackdrop) closeGithubModal();
+    });
   }
 
   function wireQueueDrawer() {
@@ -378,4 +515,5 @@
   R.loadSubmissionIntoUI = loadSubmissionIntoUI;
   R.wireImport = wireImport;
   R.wireQueueDrawer = wireQueueDrawer;
+  R.closeGithubModal = closeGithubModal;
 })();

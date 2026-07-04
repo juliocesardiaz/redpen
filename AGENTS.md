@@ -30,7 +30,13 @@ redpen-author-core.js   Author-mode module 1/6. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
                         helpers, code rendering, view swaps.
 redpen-author-import.js Author-mode module 2/6. Multi-submission queue,
-                        folder/CSV import, queue drawer, batch export.
+                        folder/CSV/GitHub import, queue drawer, batch export.
+                        GitHub import fetches file(s) by URL: public repos via
+                        raw.githubusercontent.com, private repos via an
+                        optional token against the Contents API. Network
+                        access here is opt-in and teacher-initiated, same
+                        precedent as the CDN hljs fallback — the exported
+                        file stays fully offline and self-contained.
 redpen-author-comments.js  Author-mode module 3/6. Selection → range, the
                         comment modal (incl. diff suggestion), tooltip, the
                         sidebar annotation list.

@@ -279,6 +279,7 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (!el.tagModalBackdrop.classList.contains('hidden')) { R.closeTagManager(); return; }
+        if (!el.githubModalBackdrop.classList.contains('hidden')) { R.closeGithubModal(); return; }
         if (!el.modalBackdrop.classList.contains('hidden')) R.closeCommentModal();
         if (!el.tooltip.classList.contains('hidden')) R.closeTooltip();
         R.hideCommentButton();
