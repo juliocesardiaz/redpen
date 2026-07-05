@@ -140,21 +140,47 @@
     </div>
   </div>
 
-  <!-- GitHub import modal. Fetches one or more source files straight from
-       GitHub (public via raw.githubusercontent.com, private via a token
-       against the Contents API) and adds each as a queue submission. -->
+  <!-- GitHub import modal. Three modes: arbitrary GitHub file URLs, CS50
+       submit50 submissions by org/slug/usernames, and the JSON export
+       downloaded from submit.cs50.io. Public files come from
+       raw.githubusercontent.com; everything else (submit50 repos are always
+       private) goes through the GitHub API with a token. Each imported file
+       becomes a queue submission. -->
   <div id="github-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="github-modal-title">
     <div class="modal github-modal">
       <header class="modal-header">
         <h2 id="github-modal-title" class="modal-title">Import from GitHub</h2>
       </header>
       <div class="modal-body">
-        <label class="field-label" for="github-urls">File URL(s), one per line</label>
-        <textarea id="github-urls" class="github-urls-input" rows="4"
-          placeholder="https://github.com/owner/repo/blob/main/path/to/file.py"></textarea>
-        <label class="field-label" for="github-token">Personal access token (optional, for private repos)</label>
+        <div class="view-toggle" role="tablist" aria-label="Import mode">
+          <button type="button" class="view-toggle-btn selected" data-import-mode="url" role="tab" aria-selected="true">GitHub URL</button>
+          <button type="button" class="view-toggle-btn" data-import-mode="cs50" role="tab" aria-selected="false">CS50 manual</button>
+          <button type="button" class="view-toggle-btn" data-import-mode="cs50json" role="tab" aria-selected="false">CS50 JSON</button>
+        </div>
+        <div id="github-url-fields" class="import-mode-fields">
+          <label class="field-label" for="github-urls">File URL(s), one per line</label>
+          <textarea id="github-urls" class="github-urls-input" rows="4"
+            placeholder="https://github.com/owner/repo/blob/main/path/to/file.py"></textarea>
+          <p class="modal-hint">Paste a GitHub file URL (the "blob" link from the file view) or a raw.githubusercontent.com URL.</p>
+        </div>
+        <div id="cs50-fields" class="import-mode-fields hidden">
+          <label class="field-label" for="cs50-org">GitHub organization</label>
+          <input id="cs50-org" class="meta-input" type="text" value="me50" autocomplete="off" />
+          <label class="field-label" for="cs50-slug">Problem slug</label>
+          <input id="cs50-slug" class="meta-input" type="text" placeholder="e.g. cs50/problems/2024/x/hello" autocomplete="off" />
+          <label class="field-label" for="cs50-usernames">Student GitHub username(s), one per line</label>
+          <textarea id="cs50-usernames" class="github-urls-input" rows="4" placeholder="alice&#10;bob"></textarea>
+          <p class="modal-hint">Fetches each student's submit50 submission: github.com/&lt;org&gt;/&lt;username&gt;, branch = slug. The likeliest source file is picked automatically and shown after import.</p>
+        </div>
+        <div id="cs50-json-fields" class="import-mode-fields hidden">
+          <label class="btn btn-small" for="cs50-json-input">Choose submissions JSON</label>
+          <input id="cs50-json-input" class="hidden-input" type="file" accept=".json,application/json" />
+          <p id="cs50-json-summary" class="github-modal-status" aria-live="polite"></p>
+          <p class="modal-hint">Use the JSON export downloaded from submit.cs50.io. Each submission is fetched at its exact submitted commit, real names are used when present, and check50 results prefill the score.</p>
+        </div>
+        <label class="field-label" for="github-token">Personal access token (optional for public URLs; required for CS50 — submit50 repos are private)</label>
         <input id="github-token" class="meta-input github-token-input" type="password" autocomplete="off" placeholder="ghp_..." />
-        <p class="modal-hint">Paste a GitHub file URL (the "blob" link from the file view) or a raw.githubusercontent.com URL. The token is used only for this fetch and is never saved or exported.</p>
+        <p class="modal-hint">The token is used only for this fetch and is never saved or exported.</p>
         <p id="github-modal-status" class="github-modal-status" aria-live="polite"></p>
       </div>
       <footer class="modal-footer">

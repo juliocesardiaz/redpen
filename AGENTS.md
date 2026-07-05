@@ -30,13 +30,24 @@ redpen-author-core.js   Author-mode module 1/6. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
                         helpers, code rendering, view swaps.
 redpen-author-import.js Author-mode module 2/6. Multi-submission queue,
-                        folder/CSV/GitHub import, queue drawer, batch export.
-                        GitHub import fetches file(s) by URL: public repos via
-                        raw.githubusercontent.com, private repos via an
-                        optional token against the Contents API. Network
-                        access here is opt-in and teacher-initiated, same
-                        precedent as the CDN hljs fallback — the exported
-                        file stays fully offline and self-contained.
+                        folder/CSV/GitHub/CS50 import, queue drawer, batch
+                        export. GitHub import has three modes in one modal:
+                        (1) file URLs — public via raw.githubusercontent.com,
+                        private via optional token against the Contents API;
+                        (2) CS50 manual — submit50 pushes each student's work
+                        to a PRIVATE repo github.com/<org>/<username> (org
+                        defaults to "me50"), branch = problem slug, so the
+                        owner/repo semantics invert vs. mode 1 and a token is
+                        mandatory; the branch tree is listed and the likeliest
+                        file auto-picked (stem matching the slug's last
+                        segment wins); (3) CS50 JSON — the per-assignment
+                        export downloaded from submit.cs50.io, whose
+                        github_url pins the exact submitted commit SHA; real
+                        names and check50 checks_passed/checks_run prefill
+                        studentName and the score. Network access here is
+                        opt-in and teacher-initiated, same precedent as the
+                        CDN hljs fallback — the exported file stays fully
+                        offline and self-contained.
 redpen-author-comments.js  Author-mode module 3/6. Selection → range, the
                         comment modal (incl. diff suggestion), tooltip, the
                         sidebar annotation list.

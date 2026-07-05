@@ -1105,6 +1105,17 @@ body.queue-open .workspace {
 
 /* --- GitHub import modal ---------------------------------------------- */
 
+.import-mode-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* modal-body children stretch by default; keep the tabs shrink-wrapped */
+.github-modal .view-toggle { align-self: flex-start; }
+
+.github-modal .meta-input { width: 100%; }
+
 .field-label {
   font-size: 10px;
   text-transform: uppercase;
