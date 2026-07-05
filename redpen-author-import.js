@@ -1,11 +1,12 @@
-/* redpen — author mode: queue + folder/CSV/GitHub/CS50 import
+/* redpen — author mode: queue + folder/CSV import, batch export
  *
- * Owns the multi-submission queue: importing a folder of files, files
- * straight from GitHub (by URL, or CS50 submit50 submissions by
- * org/slug/usernames or the submit.cs50.io JSON export), the optional names
- * CSV, switching between queue items, the queue drawer, navigation arrows,
- * and batch "Export all" via JSZip. See redpen-author-core.js for the
- * shared namespace contract.
+ * Owns the multi-submission queue: importing a folder of files, the optional
+ * names CSV, switching between queue items, the queue drawer, navigation
+ * arrows, and batch "Export all" via JSZip. Also owns the shared submission
+ * builder (buildQueueSubmission) and filename helpers that the GitHub/CS50
+ * modal (redpen-author-github.js) reuses via R. — imported submissions from
+ * any source enter the queue through appendToQueue. See
+ * redpen-author-core.js for the shared namespace contract.
  */
 
 (function () {
@@ -31,15 +32,39 @@
     'go', 'rb', 'rs', 'php', 'sh', 'sql', 'json', 'yml', 'yaml', 'xml',
   ]);
 
-  function parseFilename(name) {
+  // Last-dot split. A leading dot (".gitignore") counts as no extension.
+  function splitExt(name) {
     const dot = name.lastIndexOf('.');
-    const stem = dot > 0 ? name.slice(0, dot) : name;
-    const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+    return {
+      stem: dot > 0 ? name.slice(0, dot) : name,
+      ext: dot > 0 ? name.slice(dot + 1).toLowerCase() : '',
+    };
+  }
+
+  function isTextFilename(name) {
+    return TEXT_EXTS.has(splitExt(name).ext);
+  }
+
+  // The one way any import source (folder, GitHub URL, CS50) becomes a
+  // queue submission. meta: { username, filename, code, assignmentName,
+  // studentName? } — studentName falls back to the CSV lookup, language is
+  // derived from the filename extension.
+  function buildQueueSubmission(meta) {
+    const s = R.newSubmission();
+    s._username = meta.username;
+    s.studentName = meta.studentName || R.findNameInCsv(meta.username) || meta.username;
+    s.assignmentName = meta.assignmentName;
+    s.language = LANG_BY_EXT[splitExt(meta.filename).ext] || state.submission.language;
+    s.code = meta.code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    return s;
+  }
+
+  function parseFilename(name) {
+    const stem = splitExt(name).stem;
     const us = stem.indexOf('_');
     const username = us > 0 ? stem.slice(0, us) : stem;
     const project = us > 0 ? stem.slice(us + 1) : '';
-    const language = LANG_BY_EXT[ext] || null;
-    return { username, project, language, ext };
+    return { username, project };
   }
 
   function parseCsv(text) {
@@ -64,403 +89,6 @@
     return rows;
   }
 
-  // ------------------------------------------------------------------
-  // GitHub import — fetch one or more source files straight from GitHub
-  // (public repos via raw.githubusercontent.com, private repos via a
-  // personal access token against the Contents API) and add each as a
-  // queue submission, the same way folder import does.
-  // ------------------------------------------------------------------
-
-  function parseGithubUrl(raw) {
-    const url = (raw || '').trim();
-    if (!url) return null;
-    const noHash = url.split('#')[0]; // drop a trailing #L12 / #L12-L34 anchor
-    let m = noHash.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/);
-    if (m) return { owner: m[1], repo: m[2], ref: m[3], path: m[4] };
-    m = noHash.match(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/);
-    if (m) return { owner: m[1], repo: m[2], ref: m[3], path: m[4] };
-    // Shorthand: "owner/repo/path/to/file.ext" with no ref — the ref is
-    // resolved against the repo's default branch when fetched.
-    m = noHash.match(/^(?:https?:\/\/github\.com\/)?([^\/\s]+)\/([^\/\s]+)\/(.+)$/);
-    if (m) return { owner: m[1], repo: m[2], ref: null, path: m[3] };
-    return null;
-  }
-
-  async function resolveDefaultRef(owner, repo, token) {
-    const headers = { Accept: 'application/vnd.github+json' };
-    if (token) headers.Authorization = 'token ' + token;
-    const res = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo), { headers: headers });
-    if (!res.ok) throw new Error('could not resolve default branch (HTTP ' + res.status + ')');
-    const json = await res.json();
-    return json.default_branch || 'main';
-  }
-
-  // loc.path is taken verbatim from the source URL (already percent-encoded
-  // where it came from a URL) so it's reused as-is when building the fetch
-  // URL rather than re-encoding it.
-  async function fetchGithubFileContent(loc, token) {
-    const ref = loc.ref || await resolveDefaultRef(loc.owner, loc.repo, token);
-    if (token) {
-      const apiUrl = 'https://api.github.com/repos/' + encodeURIComponent(loc.owner) + '/' + encodeURIComponent(loc.repo) +
-        '/contents/' + loc.path + '?ref=' + encodeURIComponent(ref);
-      const res = await fetch(apiUrl, {
-        headers: { Accept: 'application/vnd.github.raw+json', Authorization: 'token ' + token },
-      });
-      if (!res.ok) throw new Error('GitHub API error ' + res.status);
-      return await res.text();
-    }
-    const rawUrl = 'https://raw.githubusercontent.com/' + encodeURIComponent(loc.owner) + '/' + encodeURIComponent(loc.repo) +
-      '/' + encodeURIComponent(ref) + '/' + loc.path;
-    const res = await fetch(rawUrl);
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' — private repo? add a token');
-    return await res.text();
-  }
-
-  function githubFilenameParts(path) {
-    const decoded = path.split('/').map(decodeURIComponent).join('/');
-    const filename = decoded.slice(decoded.lastIndexOf('/') + 1);
-    const dot = filename.lastIndexOf('.');
-    const stem = dot > 0 ? filename.slice(0, dot) : filename;
-    const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
-    return { filename: filename, stem: stem, ext: ext };
-  }
-
-  async function makeSubmissionFromGithubUrl(url, token) {
-    const loc = parseGithubUrl(url);
-    if (!loc) throw new Error('not a recognized GitHub file URL');
-    const text = (await fetchGithubFileContent(loc, token)).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const parsed = githubFilenameParts(loc.path);
-    const s = R.newSubmission();
-    s._username = loc.owner;
-    s.studentName = R.findNameInCsv(loc.owner) || loc.owner;
-    s.assignmentName = loc.repo;
-    s.language = LANG_BY_EXT[parsed.ext] || state.submission.language;
-    s.code = text;
-    return s;
-  }
-
-  async function importFromGithub(urlsText, token) {
-    const lines = (urlsText || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
-    const built = [];
-    const failures = [];
-    for (const line of lines) {
-      try {
-        built.push(await makeSubmissionFromGithubUrl(line, token));
-      } catch (e) {
-        failures.push({ url: line, error: e.message });
-      }
-    }
-    if (built.length) appendToQueue(built);
-    return { built: built, failures: failures };
-  }
-
-  // ------------------------------------------------------------------
-  // CS50 (submit50) import — submit50 pushes each student's work to a
-  // private repo github.com/<org>/<username> (org is "me50" for stock
-  // CS50), on a branch named after the problem slug. submit.cs50.io also
-  // offers a per-assignment JSON export whose github_url pins the exact
-  // submitted commit SHA. Both modes list the branch/commit tree, pick the
-  // likeliest source file, and fetch it through the authenticated API
-  // (these repos are never public, so a token is mandatory).
-  // ------------------------------------------------------------------
-
-  async function fetchBranchTree(org, repo, ref, token) {
-    // Slug refs contain slashes ("cs50/problems/2024/x/hello") — encode per
-    // segment so they survive as path components.
-    const encodedRef = String(ref).split('/').map(encodeURIComponent).join('/');
-    const url = 'https://api.github.com/repos/' + encodeURIComponent(org) + '/' + encodeURIComponent(repo) +
-      '/git/trees/' + encodedRef + '?recursive=1';
-    const res = await fetch(url, {
-      headers: { Accept: 'application/vnd.github+json', Authorization: 'token ' + token },
-    });
-    if (res.status === 404) throw new Error('no submission found (HTTP 404) — check the username, slug, and token access');
-    if (!res.ok) throw new Error('GitHub API error ' + res.status);
-    const json = await res.json();
-    return (json.tree || [])
-      .filter(function (node) { return node.type === 'blob'; })
-      .map(function (node) { return node.path; });
-  }
-
-  function cs50CandidateFiles(paths) {
-    return paths.filter(function (p) {
-      const f = p.slice(p.lastIndexOf('/') + 1);
-      if (f === '.cs50.yml') return false;
-      const dot = f.lastIndexOf('.');
-      const ext = dot > 0 ? f.slice(dot + 1).toLowerCase() : '';
-      return TEXT_EXTS.has(ext);
-    });
-  }
-
-  function slugLastSegment(slug) {
-    const parts = (slug || '').split('/').filter(Boolean);
-    return parts.length ? parts[parts.length - 1] : '';
-  }
-
-  function primaryFileGuess(paths, slug) {
-    if (paths.length === 1) return paths[0];
-    const target = slugLastSegment(slug).toLowerCase();
-    const matches = paths.filter(function (p) {
-      const f = p.slice(p.lastIndexOf('/') + 1);
-      const dot = f.lastIndexOf('.');
-      const stem = (dot > 0 ? f.slice(0, dot) : f).toLowerCase();
-      return stem === target;
-    });
-    // Shallowest path first, then alphabetical, for a deterministic pick.
-    const pool = (matches.length ? matches : paths).slice();
-    pool.sort(function (a, b) {
-      const depthA = a.split('/').length;
-      const depthB = b.split('/').length;
-      if (depthA !== depthB) return depthA - depthB;
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
-    return pool[0];
-  }
-
-  async function buildCs50Submission(org, username, ref, slug, token) {
-    const paths = await fetchBranchTree(org, username, ref, token);
-    const candidates = cs50CandidateFiles(paths);
-    if (!candidates.length) throw new Error('no source files found in the submission');
-    const picked = primaryFileGuess(candidates, slug);
-    // fetchGithubFileContent expects an already-encoded path (URL-mode paths
-    // arrive percent-encoded); tree paths are raw, so encode per segment.
-    const encodedPath = picked.split('/').map(encodeURIComponent).join('/');
-    const text = (await fetchGithubFileContent({ owner: org, repo: username, ref: ref, path: encodedPath }, token))
-      .replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const parsed = githubFilenameParts(encodedPath);
-    const s = R.newSubmission();
-    s._username = username;
-    s.studentName = R.findNameInCsv(username) || username;
-    s.assignmentName = slugLastSegment(slug);
-    s.language = LANG_BY_EXT[parsed.ext] || state.submission.language;
-    s.code = text;
-    return { submission: s, pickedFile: picked };
-  }
-
-  async function importFromCs50(org, slug, usernamesText, token) {
-    const usernames = (usernamesText || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
-    const built = [];
-    const picks = [];
-    const failures = [];
-    for (const username of usernames) {
-      try {
-        const r = await buildCs50Submission(org, username, slug, slug, token);
-        built.push(r.submission);
-        picks.push({ username: username, pickedFile: r.pickedFile });
-      } catch (e) {
-        failures.push({ username: username, error: e.message });
-      }
-    }
-    if (built.length) appendToQueue(built);
-    return { built: built, picks: picks, failures: failures };
-  }
-
-  function parseCs50Export(text) {
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      throw new Error('not valid JSON');
-    }
-    // submit.cs50.io exports {"<slug>": [entries]}; tolerate a bare array too.
-    let rawEntries = [];
-    if (Array.isArray(data)) {
-      rawEntries = data;
-    } else if (data && typeof data === 'object') {
-      for (const key of Object.keys(data)) {
-        if (Array.isArray(data[key])) rawEntries = rawEntries.concat(data[key]);
-      }
-    }
-    if (!rawEntries.length) {
-      throw new Error('no submissions found — expected the {"<slug>": [...]} file downloaded from submit.cs50.io');
-    }
-    const entries = [];
-    for (const e of rawEntries) {
-      if (!e || typeof e !== 'object') continue;
-      const url = e.github_url || e.archive || '';
-      const m = String(url).match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/(?:tree|archive)\/([0-9a-f]{7,40})/i);
-      const username = e.github_username || (m ? m[2] : '');
-      if (!m || !username) continue;
-      entries.push({
-        owner: m[1],
-        repo: m[2],
-        sha: m[3],
-        username: username,
-        name: typeof e.name === 'string' && e.name.trim() ? e.name.trim() : null,
-        slug: e.slug || '',
-        checksPassed: Number.isFinite(e.checks_passed) ? e.checks_passed : null,
-        checksRun: Number.isFinite(e.checks_run) ? e.checks_run : null,
-      });
-    }
-    if (!entries.length) throw new Error('no usable entries — rows are missing github_url/archive links');
-    return entries;
-  }
-
-  async function makeSubmissionFromCs50Entry(entry, token) {
-    const r = await buildCs50Submission(entry.owner, entry.repo, entry.sha, entry.slug, token);
-    const s = r.submission;
-    s._username = entry.username;
-    s.studentName = entry.name || R.findNameInCsv(entry.username) || entry.username;
-    if (entry.checksPassed !== null && entry.checksRun !== null) {
-      s.score.earned = entry.checksPassed;
-      s.score.total = entry.checksRun;
-    }
-    return { submission: s, pickedFile: r.pickedFile };
-  }
-
-  async function importFromCs50Json(entries, token) {
-    const built = [];
-    const picks = [];
-    const failures = [];
-    for (const entry of entries) {
-      try {
-        const r = await makeSubmissionFromCs50Entry(entry, token);
-        built.push(r.submission);
-        picks.push({ username: entry.username, pickedFile: r.pickedFile });
-      } catch (e) {
-        failures.push({ username: entry.username, error: e.message });
-      }
-    }
-    if (built.length) appendToQueue(built);
-    return { built: built, picks: picks, failures: failures };
-  }
-
-  function cs50ResultSummary(result) {
-    const total = result.picks.length + result.failures.length;
-    const lines = ['Imported ' + result.picks.length + ' / ' + total + '.'];
-    if (result.picks.length) {
-      lines.push('Files used: ' + result.picks.map(function (p) { return p.username + ' → ' + p.pickedFile; }).join(', '));
-    }
-    if (result.failures.length) {
-      lines.push('Failed:');
-      for (const f of result.failures) lines.push(f.username + ' — ' + f.error);
-    }
-    return lines.join('\n');
-  }
-
-  // ------------------------------------------------------------------
-  // Import modal (shared by all three modes)
-  // ------------------------------------------------------------------
-
-  // Mode and parsed-JSON stash survive close/reopen on purpose: a teacher
-  // importing a whole assignment in batches shouldn't have to re-toggle or
-  // re-pick the file every time.
-  let importMode = 'url';
-  let cs50JsonEntries = null;
-
-  function setGithubImportMode(mode) {
-    importMode = mode;
-    el.githubModalBackdrop.querySelectorAll('[data-import-mode]').forEach(function (b) {
-      const active = b.dataset.importMode === mode;
-      b.classList.toggle('selected', active);
-      b.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
-    el.githubUrlFields.classList.toggle('hidden', mode !== 'url');
-    el.cs50Fields.classList.toggle('hidden', mode !== 'cs50');
-    el.cs50JsonFields.classList.toggle('hidden', mode !== 'cs50json');
-    el.githubModalStatus.textContent = '';
-  }
-
-  function openGithubModal() {
-    el.githubModalStatus.textContent = '';
-    el.githubModalBackdrop.classList.remove('hidden');
-    setTimeout(function () { el.githubUrls.focus(); }, 0);
-  }
-
-  function closeGithubModal() {
-    el.githubModalBackdrop.classList.add('hidden');
-    el.githubToken.value = ''; // never persist a pasted token past this dialog
-  }
-
-  function runImport() {
-    if (importMode === 'cs50') return runCs50Import();
-    if (importMode === 'cs50json') return runCs50JsonImport();
-    return runGithubUrlImport();
-  }
-
-  async function runGithubUrlImport() {
-    const urlsText = el.githubUrls.value;
-    if (!urlsText.trim()) {
-      el.githubModalStatus.textContent = 'Paste at least one GitHub file URL.';
-      return;
-    }
-    const token = el.githubToken.value.trim();
-    el.githubModalImport.disabled = true;
-    el.githubModalStatus.textContent = 'Importing…';
-    try {
-      const result = await importFromGithub(urlsText, token);
-      if (result.failures.length) {
-        el.githubModalStatus.textContent = 'Imported ' + result.built.length + ' / ' + (result.built.length + result.failures.length) + '. Failed:\n' +
-          result.failures.map(function (f) { return f.url + ' — ' + f.error; }).join('\n');
-        // Leave successfully-parsed lines out of the box, but keep failures so
-        // the teacher can fix and retry without retyping everything.
-        el.githubUrls.value = result.failures.map(function (f) { return f.url; }).join('\n');
-        el.githubToken.value = '';
-      } else {
-        closeGithubModal();
-        el.githubUrls.value = '';
-      }
-    } catch (e) {
-      el.githubModalStatus.textContent = 'Import failed: ' + e.message;
-    } finally {
-      el.githubModalImport.disabled = false;
-    }
-  }
-
-  // Unlike URL mode, the CS50 modes stay open after a successful import so
-  // the teacher can review which file was auto-picked for each student.
-  async function runCs50Import() {
-    const org = el.cs50Org.value.trim() || 'me50';
-    const slug = el.cs50Slug.value.trim();
-    const usernamesText = el.cs50Usernames.value;
-    const token = el.githubToken.value.trim();
-    if (!slug) {
-      el.githubModalStatus.textContent = 'Enter the problem slug (the branch submit50 pushes to).';
-      return;
-    }
-    if (!usernamesText.trim()) {
-      el.githubModalStatus.textContent = 'Paste at least one student GitHub username.';
-      return;
-    }
-    if (!token) {
-      el.githubModalStatus.textContent = 'A personal access token is required — submit50 repos are private.';
-      return;
-    }
-    el.githubModalImport.disabled = true;
-    el.githubModalStatus.textContent = 'Importing…';
-    try {
-      const result = await importFromCs50(org, slug, usernamesText, token);
-      // Same retry pattern as URL mode: only failing usernames stay in the box.
-      el.cs50Usernames.value = result.failures.map(function (f) { return f.username; }).join('\n');
-      el.githubModalStatus.textContent = cs50ResultSummary(result);
-    } catch (e) {
-      el.githubModalStatus.textContent = 'Import failed: ' + e.message;
-    } finally {
-      el.githubModalImport.disabled = false;
-    }
-  }
-
-  async function runCs50JsonImport() {
-    const token = el.githubToken.value.trim();
-    if (!cs50JsonEntries || !cs50JsonEntries.length) {
-      el.githubModalStatus.textContent = 'Choose a submissions JSON file first.';
-      return;
-    }
-    if (!token) {
-      el.githubModalStatus.textContent = 'A personal access token is required — submit50 repos are private.';
-      return;
-    }
-    el.githubModalImport.disabled = true;
-    el.githubModalStatus.textContent = 'Importing…';
-    try {
-      const result = await importFromCs50Json(cs50JsonEntries, token);
-      el.githubModalStatus.textContent = cs50ResultSummary(result);
-    } catch (e) {
-      el.githubModalStatus.textContent = 'Import failed: ' + e.message;
-    } finally {
-      el.githubModalImport.disabled = false;
-    }
-  }
-
   function isPristineSubmission(s) {
     return !s.studentName && !s.assignmentName && !s.code &&
            s.annotations.length === 0 && !s.overallComment;
@@ -468,22 +96,18 @@
 
   async function makeSubmissionFromFile(file) {
     const parsed = parseFilename(file.name);
-    const text = (await file.text()).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const s = R.newSubmission();
-    s._username = parsed.username;
-    s.studentName = R.findNameInCsv(parsed.username) || parsed.username;
-    s.assignmentName = parsed.project || '';
-    s.language = parsed.language || state.submission.language;
-    s.code = text;
-    return s;
+    return buildQueueSubmission({
+      username: parsed.username,
+      filename: file.name,
+      code: await file.text(),
+      assignmentName: parsed.project || '',
+    });
   }
 
   async function importFolder(fileList) {
     if (!fileList || !fileList.length) return;
     const files = Array.from(fileList).filter(function (f) {
-      const dot = f.name.lastIndexOf('.');
-      const ext = dot > 0 ? f.name.slice(dot + 1).toLowerCase() : '';
-      const keep = TEXT_EXTS.has(ext);
+      const keep = isTextFilename(f.name);
       if (!keep) console.log('redpen: skipping non-text file', f.name);
       return keep;
     });
@@ -685,32 +309,6 @@
     el.btnPrev.addEventListener('click', prevSubmission);
     el.btnNext.addEventListener('click', nextSubmission);
     el.btnExportAll.addEventListener('click', exportAll);
-
-    el.btnImportGithub.addEventListener('click', openGithubModal);
-    el.githubModalCancel.addEventListener('click', closeGithubModal);
-    el.githubModalImport.addEventListener('click', runImport);
-    el.githubModalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.githubModalBackdrop) closeGithubModal();
-    });
-    el.githubModalBackdrop.querySelectorAll('[data-import-mode]').forEach(function (btn) {
-      btn.addEventListener('click', function () { setGithubImportMode(btn.dataset.importMode); });
-    });
-    el.cs50JsonInput.addEventListener('change', async function (e) {
-      const f = e.target.files[0];
-      if (!f) return;
-      try {
-        cs50JsonEntries = parseCs50Export(await f.text());
-        const slugs = Array.from(new Set(cs50JsonEntries.map(function (en) { return slugLastSegment(en.slug); }).filter(Boolean)));
-        const hasScores = cs50JsonEntries.some(function (en) { return en.checksPassed !== null; });
-        el.cs50JsonSummary.textContent = (slugs.join(', ') || f.name) + ' — ' +
-          cs50JsonEntries.length + ' student' + (cs50JsonEntries.length === 1 ? '' : 's') +
-          (hasScores ? ' (check50 scores will prefill)' : '');
-      } catch (err) {
-        cs50JsonEntries = null;
-        el.cs50JsonSummary.textContent = 'Could not read ' + f.name + ': ' + err.message;
-      }
-      e.target.value = '';
-    });
   }
 
   function wireQueueDrawer() {
@@ -803,5 +401,8 @@
   R.loadSubmissionIntoUI = loadSubmissionIntoUI;
   R.wireImport = wireImport;
   R.wireQueueDrawer = wireQueueDrawer;
-  R.closeGithubModal = closeGithubModal;
+  R.appendToQueue = appendToQueue;
+  R.splitExt = splitExt;
+  R.isTextFilename = isTextFilename;
+  R.buildQueueSubmission = buildQueueSubmission;
 })();

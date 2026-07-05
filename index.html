@@ -288,11 +288,13 @@
         document.head.appendChild(sz);
 
         // Author-mode modules, loaded in dependency order: core sets up the
-        // window.Redpen namespace; autosave loads before main so R.wireAutosave
-        // exists when main's init() runs.
+        // window.Redpen namespace; github needs import's queue/builder
+        // exports; autosave loads before main so R.wireAutosave exists when
+        // main's init() runs.
         var authorFiles = [
           'redpen-author-core.js',
           'redpen-author-import.js',
+          'redpen-author-github.js',
           'redpen-author-comments.js',
           'redpen-author-tags.js',
           'redpen-author-autosave.js',

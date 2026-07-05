@@ -5,7 +5,8 @@
  * the foundations every other author file builds on: id/model helpers, code
  * rendering, and the empty/rendered view swaps.
  *
- * Load order: core → import → comments → tags → autosave → main. Files share
+ * Load order: core → import → github → comments → tags → autosave → main.
+ * Files share
  * state by mutating window.Redpen.state properties (never module-scope `let`s,
  * which would not cross the <script> boundary). Cross-file calls go through
  * `R.`; within-file calls stay bare.

@@ -25,38 +25,43 @@ These are non-negotiable. Push back on the user before breaking any of them.
 ```
 index.html              Author-mode shell. Loads scripts in order:
                         viewer-assets.js → viewer-runtime.js → exporter.js →
-                        vendor/jszip.min.js → the six author-mode modules.
-redpen-author-core.js   Author-mode module 1/6. Creates window.Redpen, the
+                        vendor/jszip.min.js → the seven author-mode modules.
+redpen-author-core.js   Author-mode module 1/7. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
                         helpers, code rendering, view swaps.
-redpen-author-import.js Author-mode module 2/6. Multi-submission queue,
-                        folder/CSV/GitHub/CS50 import, queue drawer, batch
-                        export. GitHub import has three modes in one modal:
-                        (1) file URLs — public via raw.githubusercontent.com,
-                        private via optional token against the Contents API;
-                        (2) CS50 manual — submit50 pushes each student's work
-                        to a PRIVATE repo github.com/<org>/<username> (org
-                        defaults to "me50"), branch = problem slug, so the
-                        owner/repo semantics invert vs. mode 1 and a token is
-                        mandatory; the branch tree is listed and the likeliest
-                        file auto-picked (stem matching the slug's last
-                        segment wins); (3) CS50 JSON — the per-assignment
-                        export downloaded from submit.cs50.io, whose
-                        github_url pins the exact submitted commit SHA; real
-                        names and check50 checks_passed/checks_run prefill
-                        studentName and the score. Network access here is
-                        opt-in and teacher-initiated, same precedent as the
-                        CDN hljs fallback — the exported file stays fully
-                        offline and self-contained.
-redpen-author-comments.js  Author-mode module 3/6. Selection → range, the
+redpen-author-import.js Author-mode module 2/7. Multi-submission queue,
+                        folder/CSV import, queue drawer, batch export. Also
+                        owns the shared seam every import source feeds:
+                        R.appendToQueue plus R.buildQueueSubmission /
+                        R.splitExt / R.isTextFilename (the one place a raw
+                        file becomes a queue submission).
+redpen-author-github.js Author-mode module 3/7. The "Import from GitHub"
+                        modal, three modes: (1) file URLs — public via
+                        raw.githubusercontent.com, private via optional token
+                        against the Contents API; (2) CS50 manual — submit50
+                        pushes each student's work to a PRIVATE repo
+                        github.com/<org>/<username> (org defaults to "me50"),
+                        branch = problem slug, so the owner/repo semantics
+                        invert vs. mode 1 and a token is mandatory; the branch
+                        tree is listed and the likeliest file auto-picked
+                        (stem matching the slug's last segment wins); (3) CS50
+                        JSON — the per-assignment export downloaded from
+                        submit.cs50.io, whose github_url pins the exact
+                        submitted commit SHA; real names and check50
+                        checks_passed/checks_run prefill studentName and the
+                        score. Network access here is opt-in and
+                        teacher-initiated, same precedent as the CDN hljs
+                        fallback — the exported file stays fully offline and
+                        self-contained.
+redpen-author-comments.js  Author-mode module 4/7. Selection → range, the
                         comment modal (incl. diff suggestion), tooltip, the
                         sidebar annotation list.
-redpen-author-tags.js   Author-mode module 4/6. Tag chips in the modal,
+redpen-author-tags.js   Author-mode module 5/7. Tag chips in the modal,
                         standalone tag manager, primary tag lookup.
-redpen-author-autosave.js  Author-mode module 5/6. Debounced localStorage
+redpen-author-autosave.js  Author-mode module 6/7. Debounced localStorage
                         autosave, opt-in File System Access backup file,
                         restore banner. Must load before main.
-redpen-author-main.js   Author-mode module 6/6. Metadata input wiring, overall
+redpen-author-main.js   Author-mode module 7/7. Metadata input wiring, overall
                         comment preview, "New" reset, init() boot.
 styles.css              Author-mode styles only. Viewer styles live separately.
 exporter.js             Builds the exported HTML string from `submission` +
@@ -101,7 +106,7 @@ If you find yourself creating a `patch_*.js` file, stop and integrate the change
 
 ### Author-mode module contract
 
-All six author files share state through `window.Redpen` (referenced as `R`):
+All seven author files share state through `window.Redpen` (referenced as `R`):
 
 - `R.state` holds every cross-file mutable: `submission`, `queue`, `activeIdx`, `csvRows`, `sourceLines`, selection/edit drafts, `modalView`, `overallView`. Files mutate properties (`R.state.queue = ...`) — a module-scope `let` would not cross `<script>` boundaries.
 - `R.el` is the shared DOM-ref table (built in `redpen-author-core.js`).

@@ -355,6 +355,7 @@
     wireCopyButton();
     wireTopbar();
     R.wireImport();
+    R.wireGithubImport();
     R.wireQueueDrawer();
     R.wireAutosave();
     el.initExportButton();
