@@ -239,6 +239,20 @@ window.Redpen = {};
     return splitHighlightedByLines(html);
   }
 
+  // Highlight tokens depend only on (code, language); annotation wrapping is
+  // a separate pass over the split lines. Cache the last result so annotation
+  // add/delete/tag edits don't pay a full re-highlight of the file. The
+  // cached line strings are never mutated (the wrap pass builds new strings),
+  // so handing out the same array is safe.
+  let highlightCache = { code: null, language: null, lines: null };
+
+  function highlightByLinesCached(source, language) {
+    if (highlightCache.code !== source || highlightCache.language !== language) {
+      highlightCache = { code: source, language: language, lines: highlightByLines(source, language) };
+    }
+    return highlightCache.lines;
+  }
+
   /**
    * Walk an HTML string that contains only text and `<span …>…</span>` tags
    * (which is what hljs produces) and split it on newline characters,
@@ -311,7 +325,7 @@ window.Redpen = {};
     const savedSubmission = state.submission;
     state.submission = submission;
     try {
-      const lineHtmls = highlightByLines(code, submission.language);
+      const lineHtmls = highlightByLinesCached(code, submission.language);
 
       // Apply annotation wrappers per line. Widest first so the bigger range
       // becomes the outer <span> and smaller ranges nest inside it — this is

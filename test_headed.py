@@ -45,7 +45,13 @@ def run_cuj(page):
 if __name__ == "__main__":
     check_drift()
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        # Headed by default (this is a watch-it-run tool). REDPEN_HEADLESS=1
+        # runs it in CI/sandboxes; REDPEN_CHROMIUM points at a pre-installed
+        # browser executable.
+        kwargs = {"headless": os.environ.get("REDPEN_HEADLESS") == "1"}
+        if os.environ.get("REDPEN_CHROMIUM"):
+            kwargs["executable_path"] = os.environ["REDPEN_CHROMIUM"]
+        browser = p.chromium.launch(**kwargs)
         page = browser.new_page()
         try:
             run_cuj(page)

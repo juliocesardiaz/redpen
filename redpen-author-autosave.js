@@ -25,6 +25,11 @@
   const AUTOSAVE_KEY = 'redpen.autosave.v1';
   const AUTOSAVE_DEBOUNCE_MS = 1500;
   const AUTOSAVE_MAX_WAIT_MS = 10000;
+  // The on-disk backup rebuilds a full export and rewrites the whole file —
+  // far heavier than the localStorage write, and it's the safety net rather
+  // than the restore source. Throttle it to this floor (with a guaranteed
+  // trailing write) instead of every debounce tick.
+  const BACKUP_WRITE_MIN_MS = 15000;
 
   let autosaveTimer = null;
   let autosaveFirstDirtyAt = 0;
@@ -32,6 +37,8 @@
   let autosaveTickTimer = null;
   let backupFileHandle = null;
   let backupFileName = '';
+  let backupLastWriteAt = 0;
+  let backupTrailingTimer = null;
   let autosaveSuspended = false;
 
   function markDirty() {
@@ -78,19 +85,46 @@
       return;
     }
     autosaveLastSavedAt = Date.now();
-    if (backupFileHandle) {
-      try {
-        await writeBackupFile();
-      } catch (e) {
-        console.warn('redpen autosave: backup file write failed', e);
-        // Don't escalate to error — localStorage save succeeded. Just clear
-        // the handle so the user can re-enable.
-        backupFileHandle = null;
-        backupFileName = '';
-        updateBackupFileButton();
-      }
-    }
+    if (backupFileHandle) await scheduleBackupWrite();
     setAutosaveStatus('saved');
+  }
+
+  // Write the backup now if the throttle floor has passed; otherwise arm a
+  // single trailing timer so the latest state still reaches disk within
+  // BACKUP_WRITE_MIN_MS of the last edit.
+  async function scheduleBackupWrite() {
+    const wait = backupLastWriteAt + BACKUP_WRITE_MIN_MS - Date.now();
+    if (wait <= 0) {
+      await doBackupWrite();
+      return;
+    }
+    if (backupTrailingTimer) return;
+    backupTrailingTimer = setTimeout(function () {
+      backupTrailingTimer = null;
+      if (backupFileHandle) doBackupWrite();
+    }, wait);
+  }
+
+  async function doBackupWrite() {
+    backupLastWriteAt = Date.now();
+    try {
+      await writeBackupFile();
+    } catch (e) {
+      console.warn('redpen autosave: backup file write failed', e);
+      // Don't escalate to error — localStorage save succeeded. Just clear
+      // the handle so the user can re-enable.
+      dropBackupHandle();
+    }
+  }
+
+  function dropBackupHandle() {
+    backupFileHandle = null;
+    backupFileName = '';
+    if (backupTrailingTimer) {
+      clearTimeout(backupTrailingTimer);
+      backupTrailingTimer = null;
+    }
+    updateBackupFileButton();
   }
 
   function setAutosaveStatus(status, message) {
@@ -165,12 +199,11 @@
     // Do an immediate write so the file isn't empty.
     try {
       await writeBackupFile();
+      backupLastWriteAt = Date.now();
       setAutosaveStatus('saved');
     } catch (e) {
       console.warn('redpen autosave: initial backup write failed', e);
-      backupFileHandle = null;
-      backupFileName = '';
-      updateBackupFileButton();
+      dropBackupHandle();
     }
   }
 

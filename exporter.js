@@ -3,6 +3,15 @@
 (function () {
   'use strict';
 
+  // The inlined highlight.js bundle never changes after load — concatenate it
+  // once instead of per export (backup autosave and batch export call
+  // buildExportHtml repeatedly).
+  let combinedHljsCache = null;
+  function combinedHljs(A) {
+    if (combinedHljsCache === null) combinedHljsCache = A.hljsMain + '\n' + A.hljsDiff;
+    return combinedHljsCache;
+  }
+
   // Build the exported HTML string for a single submission. Pure builder:
   // throws on validation failures (missing names, no rendered code, missing
   // assets) so callers can choose how to surface the error. Single-submission
@@ -25,8 +34,6 @@
     const viewerCss = A.viewerCss;
     const themeCss = A.themeCss;
     const viewerRuntimeJs = A.viewerRuntime;
-    const hljsMain = A.hljsMain;
-    const hljsDiff = A.hljsDiff;
 
     if (codeHtml === undefined) {
       const codeLinesEl = document.getElementById('code-lines');
@@ -35,8 +42,6 @@
     if (!codeHtml || !codeHtml.trim()) {
       throw new Error('Export aborted: no rendered code found. Render the student\'s code before exporting.');
     }
-
-    const combinedHljs = hljsMain + '\n' + hljsDiff;
 
     let scoreBlock = '';
     if (submission.score && submission.score.earned !== null && submission.score.total !== null) {
@@ -119,10 +124,11 @@
     // Escape `</` to prevent breaking out of script tags
     const dataStr = JSON.stringify(submission).replace(/<\//g, '<\\/');
 
-    // Substitute template. Use function-form / manual walk replacements
-    // throughout — string-form replace interprets $&, $`, $', $1..$9, $$ in
-    // the payload, which mangles regex strings inside the inlined viewer
-    // runtime / hljs.
+    // Substitute template in ONE pass with a function-form replace —
+    // string-form replace would interpret $&, $`, $', $1..$9, $$ in the
+    // payload (mangling regex strings inside the inlined viewer runtime /
+    // hljs), but a function's return value is inserted verbatim. Single pass
+    // also avoids copying the multi-hundred-KB output once per placeholder.
     const subs = {
       '{{ASSIGNMENT_NAME}}': window.RedpenShared.escapeHtml(submission.assignmentName),
       '{{STUDENT_NAME}}': window.RedpenShared.escapeHtml(submission.studentName),
@@ -133,24 +139,12 @@
       '{{CODE_BODY}}': codeHtml,
       '{{PRINT_ANNOTATIONS}}': printAnnotationsHtml,
       '{{DATA}}': dataStr,
-      '{{HIGHLIGHT_JS}}': combinedHljs,
+      '{{HIGHLIGHT_JS}}': combinedHljs(A),
       '{{VIEWER_RUNTIME_JS}}': viewerRuntimeJs,
     };
-    let outputHtml = template;
-    for (const placeholder of Object.keys(subs)) {
-      const value = subs[placeholder];
-      let out = '';
-      let i = 0;
-      while (i < outputHtml.length) {
-        const idx = outputHtml.indexOf(placeholder, i);
-        if (idx === -1) { out += outputHtml.substring(i); break; }
-        out += outputHtml.substring(i, idx) + value;
-        i = idx + placeholder.length;
-      }
-      outputHtml = out;
-    }
-
-    return outputHtml;
+    return template.replace(/\{\{[A-Z_]+\}\}/g, function (placeholder) {
+      return placeholder in subs ? subs[placeholder] : placeholder;
+    });
   }
 
   function slugifyPart(s) {
