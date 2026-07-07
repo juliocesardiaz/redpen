@@ -100,7 +100,13 @@
     const res = await fetch(url, {
       headers: { Accept: 'application/vnd.github+json', Authorization: 'token ' + token },
     });
-    if (res.status === 404) throw new Error('no submission found (HTTP 404) — check the username, slug, and token access');
+    if (res.status === 404) {
+      // GitHub answers 404 (not 403) when the token can't see a private
+      // repo, so "no access" and "no submission" are indistinguishable here.
+      throw new Error('HTTP 404 — no access or no submission. Use a classic token with the repo scope, ' +
+        'confirm you can open github.com/' + org + '/' + repo + ' in the browser while signed in, ' +
+        'and check the username and slug.');
+    }
     if (!res.ok) throw new Error('GitHub API error ' + res.status);
     const json = await res.json();
     return (json.tree || [])
@@ -233,6 +239,19 @@
 
   const TOKEN_REQUIRED = 'A personal access token is required — submit50 repos are private.';
 
+  // Fine-grained tokens (github_pat_…) can only access resources owned by
+  // their chosen resource owner — normally the teacher's own account — so
+  // they can never read repos in the me50 org, and GitHub answers 404 (not
+  // 403) for private repos a token can't see. Fail fast with the reason
+  // instead of producing N confusing per-student 404s.
+  function cs50TokenProblem(token) {
+    if (!token) return TOKEN_REQUIRED;
+    if (token.startsWith('github_pat_')) {
+      return 'Fine-grained tokens (github_pat_…) can’t read me50 org repos — create a classic token (ghp_…) with the repo scope instead.';
+    }
+    return null;
+  }
+
   function setGithubImportMode(mode) {
     importMode = mode;
     el.githubModalBackdrop.querySelectorAll('[data-import-mode]').forEach(function (b) {
@@ -345,8 +364,7 @@
       function () {
         if (!slug) return 'Enter the problem slug (the branch submit50 pushes to).';
         if (!usernames.length) return 'Paste at least one student GitHub username.';
-        if (!token) return TOKEN_REQUIRED;
-        return null;
+        return cs50TokenProblem(token);
       },
       function () {
         return importBatch(usernames, async function (username) {
@@ -367,8 +385,7 @@
     return runModalImport(
       function () {
         if (!cs50JsonEntries || !cs50JsonEntries.length) return 'Choose a submissions JSON file first.';
-        if (!token) return TOKEN_REQUIRED;
-        return null;
+        return cs50TokenProblem(token);
       },
       function () {
         return importBatch(cs50JsonEntries, async function (entry) {

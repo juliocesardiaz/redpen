@@ -42,7 +42,10 @@ redpen-author-github.js Author-mode module 3/7. The "Import from GitHub"
                         pushes each student's work to a PRIVATE repo
                         github.com/<org>/<username> (org defaults to "me50"),
                         branch = problem slug, so the owner/repo semantics
-                        invert vs. mode 1 and a token is mandatory; the branch
+                        invert vs. mode 1 and a token is mandatory — a
+                        CLASSIC token (ghp_…) with repo scope; fine-grained
+                        tokens can't access me50 org repos and are rejected
+                        up front; the branch
                         tree is listed and the likeliest file auto-picked
                         (stem matching the slug's last segment wins); (3) CS50
                         JSON — the per-assignment export downloaded from

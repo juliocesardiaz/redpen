@@ -77,6 +77,14 @@ def main():
         assert "token is required" in page.inner_text("#github-modal-status")
         print("PASS: manual-mode validation (missing slug, then missing token)")
 
+        # --- Fine-grained tokens are rejected up front (they can never read
+        # --- me50 org repos; GitHub would answer 404 per student) ---
+        page.fill("#github-token", "github_pat_finegrained_example")
+        page.click("#github-modal-import")
+        assert "classic token" in page.inner_text("#github-modal-status"), page.inner_text("#github-modal-status")
+        assert page.evaluate("window.__calls.length") == 0, "no network call should be attempted"
+        print("PASS: fine-grained token rejected before any network call")
+
         # --- Manual mode success: auto-pick shown, modal stays open ---
         page.fill("#github-token", "ghp_testtoken")
         page.click("#github-modal-import")

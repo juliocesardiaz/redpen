@@ -180,7 +180,7 @@
         </div>
         <label class="field-label" for="github-token">Personal access token (optional for public URLs; required for CS50 — submit50 repos are private)</label>
         <input id="github-token" class="meta-input github-token-input" type="password" autocomplete="off" placeholder="ghp_..." />
-        <p class="modal-hint">The token is used only for this fetch and is never saved or exported.</p>
+        <p class="modal-hint">The token is used only for this fetch and is never saved or exported. CS50 modes need a classic token (ghp_…) with the repo scope — fine-grained tokens can't access me50 org repos.</p>
         <p id="github-modal-status" class="github-modal-status" aria-live="polite"></p>
       </div>
       <footer class="modal-footer">
