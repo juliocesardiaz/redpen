@@ -37,9 +37,8 @@ def run_cuj(page):
     print(f"DEBUG #code-lines: {code_lines_html[:50]}")
 
     # Export
-    with page.expect_download() as download_info:
+    with page.expect_download():
         page.locator("#btn-export").click()
-    download = download_info.value
     page.wait_for_timeout(1000)
 
 if __name__ == "__main__":

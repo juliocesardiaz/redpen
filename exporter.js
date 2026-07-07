@@ -182,9 +182,6 @@
     downloadBlob(blob, filename);
   }
 
-  // Caller is responsible for cycling the active submission so #code-lines
-  // is populated for each item (see batch caveat in buildExportHtml). We
-  // don't render here — we only build per item using whatever's live.
   async function exportZipFromBuiltEntries(entries, filename) {
     if (!window.JSZip) {
       alert('Batch export unavailable: JSZip did not load.');

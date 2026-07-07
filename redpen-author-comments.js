@@ -825,14 +825,12 @@
   R.positionCommentButton = positionCommentButton;
   R.hideCommentButton = hideCommentButton;
   R.openCommentModal = openCommentModal;
-  R.openCommentModalForEdit = openCommentModalForEdit;
   R.closeCommentModal = closeCommentModal;
   R.setSelectedType = setSelectedType;
   R.setModalView = setModalView;
   R.addCommentBlock = addCommentBlock;
   R.saveCommentModal = saveCommentModal;
   R.deleteEditingAnnotation = deleteEditingAnnotation;
-  R.deleteAnnotationById = deleteAnnotationById;
   R.resolveAnnotationForClick = resolveAnnotationForClick;
   R.openTooltip = openTooltip;
   R.closeTooltip = closeTooltip;

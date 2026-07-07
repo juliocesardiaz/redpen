@@ -275,7 +275,6 @@
         // Re-derive student names for any entries that were imported before
         // the CSV. Only overwrite entries whose studentName still matches the
         // raw username (i.e., the teacher hasn't manually edited them).
-        let touched = 0;
         for (const s of state.queue) {
           const realName = R.findNameInCsv(s._username);
           if (realName) {
@@ -283,7 +282,6 @@
             const username = (s._username || '').trim().toLowerCase();
             if (current === username || current === '') {
               s.studentName = realName;
-              touched++;
             }
           }
         }
@@ -297,8 +295,8 @@
         }
         console.info('redpen: loaded', state.csvRows.length, 'CSV rows');
 
-        // Always re-render to update the topbar/drawer even if 0 items were "touched"
-        // (the active student name or drawer labels might need refresh).
+        // Always re-render — the active student name or drawer labels may
+        // need a refresh even when no queue entries were renamed.
         loadSubmissionIntoUI();
       } catch (err) {
         console.error('redpen: CSV parse failed', err);

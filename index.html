@@ -87,7 +87,7 @@
             <button type="button" class="view-toggle-btn" data-overall-view="preview" role="tab" aria-selected="false">Preview</button>
           </div>
         </div>
-        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback. Markdown supported in step 7; for now, line breaks and basic formatting render as-is."></textarea>
+        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback. Markdown supported."></textarea>
         <div id="overall-preview" class="overall-preview hidden" aria-live="polite"></div>
       </section>
 
@@ -191,8 +191,8 @@
     </div>
   </div>
 
-  <!-- Comment editor modal. Structure is minimal for step 2; step 3 adds the
-       type selector, step 5 adds tag chips, step 7 adds the markdown preview. -->
+  <!-- Comment editor modal: annotation type selector, tag chips, comment
+       blocks with markdown edit/preview/split views. -->
   <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="comment-modal" class="modal">
       <header class="modal-header">

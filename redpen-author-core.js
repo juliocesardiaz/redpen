@@ -31,8 +31,6 @@ window.Redpen = {};
     scoreTotal: document.getElementById('score-total'),
     btnTags: document.getElementById('btn-tags'),
     btnExport: document.getElementById('btn-export'),
-    // Enable export button since it's now implemented
-    initExportButton: function() { const btn = document.getElementById('btn-export'); if(btn) { btn.disabled = false; btn.removeAttribute('title'); } },
     btnNew: document.getElementById('btn-new'),
     codeEmpty: document.getElementById('code-empty'),
     codeInput: document.getElementById('code-input'),
@@ -46,7 +44,6 @@ window.Redpen = {};
     annotationList: document.getElementById('annotation-list'),
     commentBtn: document.getElementById('comment-btn'),
     modalBackdrop: document.getElementById('modal-backdrop'),
-    modal: document.getElementById('comment-modal'),
     modalTitle: document.getElementById('modal-title'),
     modalRange: document.getElementById('modal-range'),
     modalSave: document.getElementById('modal-save'),
