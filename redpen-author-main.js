@@ -68,11 +68,7 @@
 
   function setOverallView(view) {
     state.overallView = view === 'preview' ? 'preview' : 'edit';
-    document.querySelectorAll('[data-overall-view]').forEach(function (b) {
-      const active = b.dataset.overallView === state.overallView;
-      b.classList.toggle('selected', active);
-      b.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
+    R.selectToggle('data-overall-view', state.overallView);
     if (state.overallView === 'preview') {
       renderOverallPreview();
       el.overallComment.classList.add('hidden');
@@ -128,11 +124,7 @@
       const codeEl = wrap.querySelector('pre code');
       if (!codeEl) return;
       const text = codeEl.innerText;
-      function flash(msg) {
-        const prev = btn.textContent;
-        btn.textContent = msg;
-        setTimeout(function () { btn.textContent = prev; }, 1200);
-      }
+      function flash(msg) { R.flashText(btn, msg, 1200); }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
           function () { flash('Copied'); },
@@ -253,9 +245,7 @@
 
     el.modalSave.addEventListener('click', R.saveCommentModal);
     el.modalCancel.addEventListener('click', R.closeCommentModal);
-    el.modalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.modalBackdrop) R.closeCommentModal();
-    });
+    R.wireBackdropClose(el.modalBackdrop, R.closeCommentModal);
 
     el.typeSelector.addEventListener('change', function (e) {
       if (e.target && e.target.name === 'annotation-type') R.setSelectedType(e.target.value);
@@ -309,9 +299,7 @@
     });
     el.tagModalClose.addEventListener('click', R.closeTagManager);
     el.btnAddTagRow.addEventListener('click', R.addNewTagRow);
-    el.tagModalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.tagModalBackdrop) R.closeTagManager();
-    });
+    R.wireBackdropClose(el.tagModalBackdrop, R.closeTagManager);
   }
 
   function resetEverything() {

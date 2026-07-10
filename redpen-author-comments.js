@@ -496,11 +496,7 @@
   function setModalView(view) {
     state.modalView = view === 'preview' || view === 'split' ? view : 'edit';
     el.commentBlocks.dataset.view = state.modalView;
-    document.querySelectorAll('[data-modal-view]').forEach(function (b) {
-      const active = b.dataset.modalView === state.modalView;
-      b.classList.toggle('selected', active);
-      b.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
+    R.selectToggle('data-modal-view', state.modalView);
     if (state.modalView !== 'edit') {
       for (let i = 0; i < state.editingBlocks.length; i++) updateBlockPreview(i);
     }

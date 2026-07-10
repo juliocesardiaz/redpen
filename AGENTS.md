@@ -28,7 +28,9 @@ index.html              Author-mode shell. Loads scripts in order:
                         vendor/jszip.min.js → the seven author-mode modules.
 redpen-author-core.js   Author-mode module 1/7. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
-                        helpers, code rendering, view swaps.
+                        helpers, code rendering, view swaps, and the shared
+                        UI idioms (R.selectToggle, R.wireBackdropClose,
+                        R.flashText) the other modules reuse.
 redpen-author-import.js Author-mode module 2/7. Multi-submission queue,
                         folder/CSV import, queue drawer, batch export. Also
                         owns the shared seam every import source feeds:
@@ -175,9 +177,9 @@ As of the batch-export feature, that split exists: `buildExportHtml(submission, 
 
 `viewer-runtime.js` runs in author mode (where it only publishes `window.RedpenShared`) and in the exported file (where the init block also runs because `#submission-data` exists). Don't break this dual-use:
 
-- The `if (!document.getElementById('submission-data')) return;` guard at line 107 is load-bearing. Don't move shared helpers below it.
+- The `if (!document.getElementById('submission-data')) return;` guard at the top of the viewer-init block is load-bearing. Don't move shared helpers below it.
 - Tooltip visibility is controlled exclusively by the `hidden` CSS class. Never re-introduce the HTML `hidden` attribute on `#tooltip` — it caused a first-click-invisible bug that's already fixed.
-- `resolveAnnotationFromTarget` (line 238) implements innermost-wins via DOM walk plus a line-level fallback for clicks on whitespace/wash. Don't replace it with `event.target.closest('.annotation')` alone — you'll lose the line fallback.
+- `resolveAnnotationFromTarget` implements innermost-wins via DOM walk plus a line-level fallback for clicks on whitespace/wash. Don't replace it with `event.target.closest('.annotation')` alone — you'll lose the line fallback.
 
 ## Editing viewer-assets.js
 

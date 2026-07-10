@@ -114,9 +114,13 @@
       .map(function (node) { return node.path; });
   }
 
+  function basename(p) {
+    return p.slice(p.lastIndexOf('/') + 1);
+  }
+
   function cs50CandidateFiles(paths) {
     return paths.filter(function (p) {
-      const f = p.slice(p.lastIndexOf('/') + 1);
+      const f = basename(p);
       return f !== '.cs50.yml' && R.isTextFilename(f);
     });
   }
@@ -130,8 +134,7 @@
     if (paths.length === 1) return paths[0];
     const target = slugLastSegment(slug).toLowerCase();
     const matches = paths.filter(function (p) {
-      const f = p.slice(p.lastIndexOf('/') + 1);
-      return R.splitExt(f).stem.toLowerCase() === target;
+      return R.splitExt(basename(p)).stem.toLowerCase() === target;
     });
     // Shallowest path first, then alphabetical, for a deterministic pick.
     const pool = (matches.length ? matches : paths).slice();
@@ -154,7 +157,7 @@
     const encodedPath = picked.split('/').map(encodeURIComponent).join('/');
     const submission = R.buildQueueSubmission({
       username: username,
-      filename: picked.slice(picked.lastIndexOf('/') + 1),
+      filename: basename(picked),
       code: await fetchGithubFileContent({ owner: org, repo: username, ref: ref, path: encodedPath }, token),
       assignmentName: slugLastSegment(slug),
     });
@@ -254,11 +257,7 @@
 
   function setGithubImportMode(mode) {
     importMode = mode;
-    el.githubModalBackdrop.querySelectorAll('[data-import-mode]').forEach(function (b) {
-      const active = b.dataset.importMode === mode;
-      b.classList.toggle('selected', active);
-      b.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
+    R.selectToggle('data-import-mode', mode, el.githubModalBackdrop);
     el.githubUrlFields.classList.toggle('hidden', mode !== 'url');
     el.cs50Fields.classList.toggle('hidden', mode !== 'cs50');
     el.cs50JsonFields.classList.toggle('hidden', mode !== 'cs50json');
@@ -403,9 +402,7 @@
     el.btnImportGithub.addEventListener('click', openGithubModal);
     el.githubModalCancel.addEventListener('click', closeGithubModal);
     el.githubModalImport.addEventListener('click', runImport);
-    el.githubModalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.githubModalBackdrop) closeGithubModal();
-    });
+    R.wireBackdropClose(el.githubModalBackdrop, closeGithubModal);
     el.githubModalBackdrop.querySelectorAll('[data-import-mode]').forEach(function (btn) {
       btn.addEventListener('click', function () { setGithubImportMode(btn.dataset.importMode); });
     });

@@ -211,6 +211,34 @@ window.Redpen = {};
   }
 
   // ------------------------------------------------------------------
+  // Shared UI idioms (used by several author modules)
+  // ------------------------------------------------------------------
+
+  // Mark the button whose data-* attribute equals `value` as selected
+  // (visual + aria) among all buttons carrying that attribute.
+  function selectToggle(attr, value, root) {
+    (root || document).querySelectorAll('[' + attr + ']').forEach(function (b) {
+      const active = b.getAttribute(attr) === value;
+      b.classList.toggle('selected', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
+  // Close a modal when the dimmed backdrop itself (not the dialog) is clicked.
+  function wireBackdropClose(backdrop, close) {
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) close();
+    });
+  }
+
+  // Temporarily swap a node's text (status feedback), restoring after ms.
+  function flashText(node, msg, ms) {
+    const prev = node.textContent;
+    node.textContent = msg;
+    setTimeout(function () { node.textContent = prev; }, ms);
+  }
+
+  // ------------------------------------------------------------------
   // Highlight.js configuration + code rendering
   // ------------------------------------------------------------------
 
@@ -553,6 +581,9 @@ window.Redpen = {};
   R.getAnnotationById = getAnnotationById;
   R.getTagById = getTagById;
   R.cssEscape = cssEscape;
+  R.selectToggle = selectToggle;
+  R.wireBackdropClose = wireBackdropClose;
+  R.flashText = flashText;
   R.renderCodeView = renderCodeView;
   R.showEmptyView = showEmptyView;
   R.showRenderedView = showRenderedView;

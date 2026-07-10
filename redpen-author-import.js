@@ -288,11 +288,7 @@
 
         // Visible feedback
         const label = document.getElementById('csv-input-label');
-        if (label) {
-          const originalText = label.textContent;
-          label.textContent = `Names CSV ✓ ${state.csvRows.length} rows`;
-          setTimeout(() => { label.textContent = originalText; }, 2500);
-        }
+        if (label) R.flashText(label, `Names CSV ✓ ${state.csvRows.length} rows`, 2500);
         console.info('redpen: loaded', state.csvRows.length, 'CSV rows');
 
         // Always re-render — the active student name or drawer labels may
