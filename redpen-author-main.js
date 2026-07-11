@@ -164,37 +164,10 @@
     });
 
     // Cross-element hover: a span annotation that crosses hljs token
-    // boundaries becomes several sibling <span>s. Rather than relying on
-    // :hover (which fires per-element) we track the annotation under the
-    // cursor and toggle a .hovered class on every DOM element that shares
-    // the id, plus the .line rows for a line-level annotation's full range.
-    let hoveredAnnotationId = null;
-    function applyHovered(id) {
-      const parts = el.codeLines.querySelectorAll('[data-annotation-id="' + R.cssEscape(id) + '"]');
-      parts.forEach(function (p) { p.classList.add('hovered'); });
-      const a = R.getAnnotationById(id);
-      if (a && (a.type === 'line-range' || a.type === 'block')) {
-        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
-          const row = el.codeLines.querySelector('.line[data-line="' + ln + '"]');
-          if (row) row.classList.add('hovered');
-        }
-      }
-    }
-    function clearHovered() {
-      const parts = el.codeLines.querySelectorAll('.annotation.hovered, .line.hovered');
-      parts.forEach(function (p) { p.classList.remove('hovered'); });
-    }
-    function setHovered(id) {
-      if (id === hoveredAnnotationId) return;
-      clearHovered();
-      hoveredAnnotationId = id;
-      if (id) applyHovered(id);
-    }
-    el.codeLines.addEventListener('mousemove', function (e) {
-      const hit = R.resolveAnnotationForClick(e.target);
-      setHovered(hit ? hit.id : null);
-    });
-    el.codeLines.addEventListener('mouseleave', function () { setHovered(null); });
+    // boundaries becomes several sibling <span>s. The shared helper tracks
+    // the annotation under the cursor and toggles .hovered on every element
+    // that shares its id (same behaviour as the exported viewer).
+    window.RedpenShared.wireHoverSync(el.codeLines, R.getAnnotationById);
 
     // Clicks anywhere else close the tooltip — but not clicks inside the
     // tooltip itself (so a student can select text inside to copy).
@@ -306,22 +279,12 @@
     Object.assign(state.submission, R.newSubmission());
     state.queue = [state.submission];
     state.activeIdx = 0;
-    el.studentName.value = '';
-    el.assignmentName.value = '';
-    el.languageSelect.value = 'python';
-    el.scoreEarned.value = '';
-    el.scoreTotal.value = '';
-    el.overallComment.value = '';
-    el.codeInput.value = '';
-    setOverallView('edit');
     R.closeCommentModal();
     R.closeTooltip();
     R.hideCommentButton();
-    R.renderAnnotationList();
-    R.renderQueueDrawer();
-    R.updateQueueCounter();
-    R.updateExportAllButton();
-    R.showEmptyView();
+    // Repopulates every metadata input and the code view from the fresh
+    // submission — the same path queue switching uses.
+    R.loadSubmissionIntoUI();
     R.clearAutosaveDraft();
     R.resetAutosaveTimers();
   }

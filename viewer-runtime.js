@@ -4,15 +4,18 @@
   'use strict';
 
   function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, function (c) {
+    return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
-  function escapeAttr(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
+  // Same escaping suffices for attribute values; the separate name keeps
+  // call sites self-documenting.
+  const escapeAttr = escapeHtml;
+
+  function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return String(s).replace(/"/g, '\\"');
   }
 
   // Aliases map user-written fence languages onto hljs grammar names. Any
@@ -213,13 +216,54 @@
     return null;
   }
 
+  /**
+   * Cross-element hover sync, used by both author mode and the viewer.
+   * A single annotation often becomes several sibling .annotation spans
+   * (hljs token boundaries split them, multi-line ranges produce one segment
+   * per line). Driving the highlight from per-element :hover would only
+   * light up the segment under the cursor; drive it from a JS-managed
+   * .hovered class so every segment (and, for a line-level annotation,
+   * every row in the range) responds as a single unit.
+   */
+  function wireHoverSync(codeRoot, getAnnotationById) {
+    let hoveredId = null;
+    function applyHovered(id) {
+      const parts = codeRoot.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
+      parts.forEach(function (p) { p.classList.add('hovered'); });
+      const a = getAnnotationById(id);
+      if (a && (a.type === 'line-range' || a.type === 'block')) {
+        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
+          const row = codeRoot.querySelector('.line[data-line="' + ln + '"]');
+          if (row) row.classList.add('hovered');
+        }
+      }
+    }
+    function clearHovered() {
+      const parts = codeRoot.querySelectorAll('.annotation.hovered, .line.hovered');
+      parts.forEach(function (p) { p.classList.remove('hovered'); });
+    }
+    function setHovered(id) {
+      if (id === hoveredId) return;
+      clearHovered();
+      hoveredId = id;
+      if (id) applyHovered(id);
+    }
+    codeRoot.addEventListener('mousemove', function (e) {
+      const hit = resolveAnnotationFromTarget(e.target, codeRoot);
+      setHovered(hit ? hit.id : null);
+    });
+    codeRoot.addEventListener('mouseleave', function () { setHovered(null); });
+  }
+
   // Expose to window for author mode to use as well
   window.RedpenShared = {
     escapeHtml: escapeHtml,
     escapeAttr: escapeAttr,
+    cssEscape: cssEscape,
     renderMarkdown: renderMarkdown,
     positionTooltip: positionTooltip,
     resolveAnnotationFromTarget: resolveAnnotationFromTarget,
+    wireHoverSync: wireHoverSync,
   };
 
   // ------------------------------------------------------------------
@@ -314,11 +358,6 @@
     positionTooltip(tooltip, anchor);
   }
 
-  function cssEscape(s) {
-    if (window.CSS && CSS.escape) return CSS.escape(s);
-    return String(s).replace(/"/g, '\\"');
-  }
-
   function wireAnnotations() {
     const codeView = document.querySelector('.code-view');
     if (!codeView) return;
@@ -336,40 +375,7 @@
       }
     });
 
-    // Cross-element hover sync. A single annotation often becomes several
-    // sibling .annotation spans (hljs token boundaries split them, multi-
-    // line ranges produce one segment per line). Driving the highlight
-    // from per-element :hover would only light up the segment under the
-    // cursor; drive it from a JS-managed .hovered class so every segment
-    // (and, for a line-level annotation, every row in the range) responds
-    // as a single unit.
-    let hoveredId = null;
-    function applyHovered(id) {
-      const parts = codeView.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
-      parts.forEach(function (p) { p.classList.add('hovered'); });
-      const a = getAnnotationById(id);
-      if (a && (a.type === 'line-range' || a.type === 'block')) {
-        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
-          const row = codeView.querySelector('.line[data-line="' + ln + '"]');
-          if (row) row.classList.add('hovered');
-        }
-      }
-    }
-    function clearHovered() {
-      const parts = codeView.querySelectorAll('.annotation.hovered, .line.hovered');
-      parts.forEach(function (p) { p.classList.remove('hovered'); });
-    }
-    function setHovered(id) {
-      if (id === hoveredId) return;
-      clearHovered();
-      hoveredId = id;
-      if (id) applyHovered(id);
-    }
-    codeView.addEventListener('mousemove', function (e) {
-      const hit = resolveAnnotationFromTarget(e.target, codeView);
-      setHovered(hit ? hit.id : null);
-    });
-    codeView.addEventListener('mouseleave', function () { setHovered(null); });
+    wireHoverSync(codeView, getAnnotationById);
   }
 
   function wireTooltip() {
@@ -389,23 +395,15 @@
       }
     });
 
-    window.addEventListener('resize', function () {
+    function repositionIfOpen() {
       if (tooltip.classList.contains('hidden')) return;
       const id = tooltip.dataset.annotationId;
-      if (id) {
-        const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) showTooltipAt(hit);
-      }
-    });
-
-    window.addEventListener('scroll', function () {
-      if (tooltip.classList.contains('hidden')) return;
-      const id = tooltip.dataset.annotationId;
-      if (id) {
-        const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) showTooltipAt(hit);
-      }
-    });
+      if (!id) return;
+      const hit = document.querySelector('.annotation[data-annotation-id="' + cssEscape(id) + '"]');
+      if (hit) showTooltipAt(hit);
+    }
+    window.addEventListener('resize', repositionIfOpen);
+    window.addEventListener('scroll', repositionIfOpen);
   }
 
   function wireCopyButton() {

@@ -26,6 +26,14 @@
   const R = window.Redpen;
   const el = R.el;
 
+  // GitHub REST headers: the requested media type plus, when present, the
+  // token in the Authorization format all three modes share.
+  function apiHeaders(accept, token) {
+    const headers = { Accept: accept };
+    if (token) headers.Authorization = 'token ' + token;
+    return headers;
+  }
+
   // ------------------------------------------------------------------
   // GitHub URL mode — fetch files by their github.com/raw URLs
   // ------------------------------------------------------------------
@@ -46,9 +54,9 @@
   }
 
   async function resolveDefaultRef(owner, repo, token) {
-    const headers = { Accept: 'application/vnd.github+json' };
-    if (token) headers.Authorization = 'token ' + token;
-    const res = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo), { headers: headers });
+    const res = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo), {
+      headers: apiHeaders('application/vnd.github+json', token),
+    });
     if (!res.ok) throw new Error('could not resolve default branch (HTTP ' + res.status + ')');
     const json = await res.json();
     return json.default_branch || 'main';
@@ -63,7 +71,7 @@
       const apiUrl = 'https://api.github.com/repos/' + encodeURIComponent(loc.owner) + '/' + encodeURIComponent(loc.repo) +
         '/contents/' + loc.path + '?ref=' + encodeURIComponent(ref);
       const res = await fetch(apiUrl, {
-        headers: { Accept: 'application/vnd.github.raw+json', Authorization: 'token ' + token },
+        headers: apiHeaders('application/vnd.github.raw+json', token),
       });
       if (!res.ok) throw new Error('GitHub API error ' + res.status);
       return await res.text();
@@ -98,7 +106,7 @@
     const url = 'https://api.github.com/repos/' + encodeURIComponent(org) + '/' + encodeURIComponent(repo) +
       '/git/trees/' + encodedRef + '?recursive=1';
     const res = await fetch(url, {
-      headers: { Accept: 'application/vnd.github+json', Authorization: 'token ' + token },
+      headers: apiHeaders('application/vnd.github+json', token),
     });
     if (res.status === 404) {
       // GitHub answers 404 (not 403) when the token can't see a private

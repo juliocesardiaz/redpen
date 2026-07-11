@@ -205,11 +205,6 @@ window.Redpen = {};
     return null;
   }
 
-  function cssEscape(s) {
-    if (window.CSS && CSS.escape) return CSS.escape(s);
-    return String(s).replace(/"/g, '\\"');
-  }
-
   // ------------------------------------------------------------------
   // Shared UI idioms (used by several author modules)
   // ------------------------------------------------------------------
@@ -580,7 +575,9 @@ window.Redpen = {};
   R.findNameInCsv = findNameInCsv;
   R.getAnnotationById = getAnnotationById;
   R.getTagById = getTagById;
-  R.cssEscape = cssEscape;
+  // viewer-runtime.js loads before every author module, so the shared copy
+  // is always present here.
+  R.cssEscape = window.RedpenShared.cssEscape;
   R.selectToggle = selectToggle;
   R.wireBackdropClose = wireBackdropClose;
   R.flashText = flashText;
