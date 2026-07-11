@@ -1,9 +1,12 @@
-/* redpen — author mode: queue + folder/CSV import
+/* redpen — author mode: queue + folder/CSV import, batch export
  *
  * Owns the multi-submission queue: importing a folder of files, the optional
  * names CSV, switching between queue items, the queue drawer, navigation
- * arrows, and batch "Export all" via JSZip. See redpen-author-core.js for the
- * shared namespace contract.
+ * arrows, and batch "Export all" via JSZip. Also owns the shared submission
+ * builder (buildQueueSubmission) and filename helpers that the GitHub/CS50
+ * modal (redpen-author-github.js) reuses via R. — imported submissions from
+ * any source enter the queue through appendToQueue. See
+ * redpen-author-core.js for the shared namespace contract.
  */
 
 (function () {
@@ -29,15 +32,39 @@
     'go', 'rb', 'rs', 'php', 'sh', 'sql', 'json', 'yml', 'yaml', 'xml',
   ]);
 
-  function parseFilename(name) {
+  // Last-dot split. A leading dot (".gitignore") counts as no extension.
+  function splitExt(name) {
     const dot = name.lastIndexOf('.');
-    const stem = dot > 0 ? name.slice(0, dot) : name;
-    const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+    return {
+      stem: dot > 0 ? name.slice(0, dot) : name,
+      ext: dot > 0 ? name.slice(dot + 1).toLowerCase() : '',
+    };
+  }
+
+  function isTextFilename(name) {
+    return TEXT_EXTS.has(splitExt(name).ext);
+  }
+
+  // The one way any import source (folder, GitHub URL, CS50) becomes a
+  // queue submission. meta: { username, filename, code, assignmentName,
+  // studentName? } — studentName falls back to the CSV lookup, language is
+  // derived from the filename extension.
+  function buildQueueSubmission(meta) {
+    const s = R.newSubmission();
+    s._username = meta.username;
+    s.studentName = meta.studentName || R.findNameInCsv(meta.username) || meta.username;
+    s.assignmentName = meta.assignmentName;
+    s.language = LANG_BY_EXT[splitExt(meta.filename).ext] || state.submission.language;
+    s.code = meta.code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    return s;
+  }
+
+  function parseFilename(name) {
+    const stem = splitExt(name).stem;
     const us = stem.indexOf('_');
     const username = us > 0 ? stem.slice(0, us) : stem;
     const project = us > 0 ? stem.slice(us + 1) : '';
-    const language = LANG_BY_EXT[ext] || null;
-    return { username, project, language, ext };
+    return { username, project };
   }
 
   function parseCsv(text) {
@@ -69,22 +96,18 @@
 
   async function makeSubmissionFromFile(file) {
     const parsed = parseFilename(file.name);
-    const text = (await file.text()).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const s = R.newSubmission();
-    s._username = parsed.username;
-    s.studentName = R.findNameInCsv(parsed.username) || parsed.username;
-    s.assignmentName = parsed.project || '';
-    s.language = parsed.language || state.submission.language;
-    s.code = text;
-    return s;
+    return buildQueueSubmission({
+      username: parsed.username,
+      filename: file.name,
+      code: await file.text(),
+      assignmentName: parsed.project || '',
+    });
   }
 
   async function importFolder(fileList) {
     if (!fileList || !fileList.length) return;
     const files = Array.from(fileList).filter(function (f) {
-      const dot = f.name.lastIndexOf('.');
-      const ext = dot > 0 ? f.name.slice(dot + 1).toLowerCase() : '';
-      const keep = TEXT_EXTS.has(ext);
+      const keep = isTextFilename(f.name);
       if (!keep) console.log('redpen: skipping non-text file', f.name);
       return keep;
     });
@@ -252,7 +275,6 @@
         // Re-derive student names for any entries that were imported before
         // the CSV. Only overwrite entries whose studentName still matches the
         // raw username (i.e., the teacher hasn't manually edited them).
-        let touched = 0;
         for (const s of state.queue) {
           const realName = R.findNameInCsv(s._username);
           if (realName) {
@@ -260,22 +282,17 @@
             const username = (s._username || '').trim().toLowerCase();
             if (current === username || current === '') {
               s.studentName = realName;
-              touched++;
             }
           }
         }
 
         // Visible feedback
         const label = document.getElementById('csv-input-label');
-        if (label) {
-          const originalText = label.textContent;
-          label.textContent = `Names CSV ✓ ${state.csvRows.length} rows`;
-          setTimeout(() => { label.textContent = originalText; }, 2500);
-        }
+        if (label) R.flashText(label, `Names CSV ✓ ${state.csvRows.length} rows`, 2500);
         console.info('redpen: loaded', state.csvRows.length, 'CSV rows');
 
-        // Always re-render to update the topbar/drawer even if 0 items were "touched"
-        // (the active student name or drawer labels might need refresh).
+        // Always re-render — the active student name or drawer labels may
+        // need a refresh even when no queue entries were renamed.
         loadSubmissionIntoUI();
       } catch (err) {
         console.error('redpen: CSV parse failed', err);
@@ -378,4 +395,8 @@
   R.loadSubmissionIntoUI = loadSubmissionIntoUI;
   R.wireImport = wireImport;
   R.wireQueueDrawer = wireQueueDrawer;
+  R.appendToQueue = appendToQueue;
+  R.splitExt = splitExt;
+  R.isTextFilename = isTextFilename;
+  R.buildQueueSubmission = buildQueueSubmission;
 })();

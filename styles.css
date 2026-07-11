@@ -1103,6 +1103,56 @@ body.queue-open .workspace {
   background: var(--bg-muted);
 }
 
+/* --- GitHub import modal ---------------------------------------------- */
+
+.import-mode-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* modal-body children stretch by default; keep the tabs shrink-wrapped */
+.github-modal .view-toggle { align-self: flex-start; }
+
+.github-modal .meta-input { width: 100%; }
+
+.field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.github-urls-input {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  box-sizing: border-box;
+}
+.github-urls-input:focus, .github-token-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+}
+
+.github-token-input { width: 100%; }
+
+.github-modal-status {
+  margin: 0;
+  min-height: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
 /* --- Markdown body (shared by tooltip / overall preview / modal preview) */
 
 .markdown-body { color: inherit; }

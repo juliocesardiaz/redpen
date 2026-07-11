@@ -25,21 +25,48 @@ These are non-negotiable. Push back on the user before breaking any of them.
 ```
 index.html              Author-mode shell. Loads scripts in order:
                         viewer-assets.js → viewer-runtime.js → exporter.js →
-                        vendor/jszip.min.js → the six author-mode modules.
-redpen-author-core.js   Author-mode module 1/6. Creates window.Redpen, the
+                        vendor/jszip.min.js → the seven author-mode modules.
+redpen-author-core.js   Author-mode module 1/7. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
-                        helpers, code rendering, view swaps.
-redpen-author-import.js Author-mode module 2/6. Multi-submission queue,
-                        folder/CSV import, queue drawer, batch export.
-redpen-author-comments.js  Author-mode module 3/6. Selection → range, the
+                        helpers, code rendering, view swaps, and the shared
+                        UI idioms (R.selectToggle, R.wireBackdropClose,
+                        R.flashText) the other modules reuse.
+redpen-author-import.js Author-mode module 2/7. Multi-submission queue,
+                        folder/CSV import, queue drawer, batch export. Also
+                        owns the shared seam every import source feeds:
+                        R.appendToQueue plus R.buildQueueSubmission /
+                        R.splitExt / R.isTextFilename (the one place a raw
+                        file becomes a queue submission).
+redpen-author-github.js Author-mode module 3/7. The "Import from GitHub"
+                        modal, three modes: (1) file URLs — public via
+                        raw.githubusercontent.com, private via optional token
+                        against the Contents API; (2) CS50 manual — submit50
+                        pushes each student's work to a PRIVATE repo
+                        github.com/<org>/<username> (org defaults to "me50"),
+                        branch = problem slug, so the owner/repo semantics
+                        invert vs. mode 1 and a token is mandatory — a
+                        CLASSIC token (ghp_…) with repo scope; fine-grained
+                        tokens can't access me50 org repos and are rejected
+                        up front; the branch
+                        tree is listed and the likeliest file auto-picked
+                        (stem matching the slug's last segment wins); (3) CS50
+                        JSON — the per-assignment export downloaded from
+                        submit.cs50.io, whose github_url pins the exact
+                        submitted commit SHA; real names and check50
+                        checks_passed/checks_run prefill studentName and the
+                        score. Network access here is opt-in and
+                        teacher-initiated, same precedent as the CDN hljs
+                        fallback — the exported file stays fully offline and
+                        self-contained.
+redpen-author-comments.js  Author-mode module 4/7. Selection → range, the
                         comment modal (incl. diff suggestion), tooltip, the
                         sidebar annotation list.
-redpen-author-tags.js   Author-mode module 4/6. Tag chips in the modal,
+redpen-author-tags.js   Author-mode module 5/7. Tag chips in the modal,
                         standalone tag manager, primary tag lookup.
-redpen-author-autosave.js  Author-mode module 5/6. Debounced localStorage
+redpen-author-autosave.js  Author-mode module 6/7. Debounced localStorage
                         autosave, opt-in File System Access backup file,
                         restore banner. Must load before main.
-redpen-author-main.js   Author-mode module 6/6. Metadata input wiring, overall
+redpen-author-main.js   Author-mode module 7/7. Metadata input wiring, overall
                         comment preview, "New" reset, init() boot.
 styles.css              Author-mode styles only. Viewer styles live separately.
 exporter.js             Builds the exported HTML string from `submission` +
@@ -70,7 +97,18 @@ vendor/                 highlight.min.js, highlight-diff.min.js, highlight-theme
                         into the viewer.
 test_headed.py          Playwright smoke test. Loads index.html via a local
                         server on :3000, fills the form, renders, exports.
-                        Runs check_drift.py as a precondition.
+                        Runs check_drift.py as a precondition. Headed by
+                        default; REDPEN_HEADLESS=1 / REDPEN_CHROMIUM=<path>
+                        for CI/sandboxes.
+tests/                  Headless behavioral suites (plain python3, no
+                        pytest): test_import_url.py and test_import_cs50.py
+                        pin the import modal's contract — DOM ids, status
+                        strings, queue semantics, auto-pick order, token
+                        handling. Self-serving (ephemeral-port http.server);
+                        fetch is stubbed in-page so they run offline.
+                        fixtures/cs50_export_sample.json is a synthesized
+                        submit.cs50.io export (fake usernames — never commit
+                        real student data here).
 check_drift.py          Verifies the strings baked into viewer-assets.js
                         still match their sources (viewer-runtime.js,
                         viewer-template.html, the two hljs vendor files,
@@ -84,7 +122,7 @@ If you find yourself creating a `patch_*.js` file, stop and integrate the change
 
 ### Author-mode module contract
 
-All six author files share state through `window.Redpen` (referenced as `R`):
+All seven author files share state through `window.Redpen` (referenced as `R`):
 
 - `R.state` holds every cross-file mutable: `submission`, `queue`, `activeIdx`, `csvRows`, `sourceLines`, selection/edit drafts, `modalView`, `overallView`. Files mutate properties (`R.state.queue = ...`) — a module-scope `let` would not cross `<script>` boundaries.
 - `R.el` is the shared DOM-ref table (built in `redpen-author-core.js`).
@@ -139,9 +177,9 @@ As of the batch-export feature, that split exists: `buildExportHtml(submission, 
 
 `viewer-runtime.js` runs in author mode (where it only publishes `window.RedpenShared`) and in the exported file (where the init block also runs because `#submission-data` exists). Don't break this dual-use:
 
-- The `if (!document.getElementById('submission-data')) return;` guard at line 107 is load-bearing. Don't move shared helpers below it.
+- The `if (!document.getElementById('submission-data')) return;` guard at the top of the viewer-init block is load-bearing. Don't move shared helpers below it.
 - Tooltip visibility is controlled exclusively by the `hidden` CSS class. Never re-introduce the HTML `hidden` attribute on `#tooltip` — it caused a first-click-invisible bug that's already fixed.
-- `resolveAnnotationFromTarget` (line 238) implements innermost-wins via DOM walk plus a line-level fallback for clicks on whitespace/wash. Don't replace it with `event.target.closest('.annotation')` alone — you'll lose the line fallback.
+- `resolveAnnotationFromTarget` implements innermost-wins via DOM walk plus a line-level fallback for clicks on whitespace/wash. Don't replace it with `event.target.closest('.annotation')` alone — you'll lose the line fallback.
 
 ## Editing viewer-assets.js
 
@@ -154,12 +192,28 @@ This is the only file that's awkward to edit and it has no automation:
 
 ## Testing
 
-`test_headed.py` is a Playwright smoke test that exercises render + export. To run it:
+The headless behavioral suites in `tests/` pin the import modal's contract
+(exact status strings, queue semantics, auto-pick order, token handling).
+Run them after any change touching import, the queue, or the modal:
+
+```
+python3 tests/test_import_url.py     # GitHub URL mode
+python3 tests/test_import_cs50.py    # CS50 manual + JSON modes
+```
+
+They start their own server (ephemeral port) and stub `fetch` in-page — no
+network, no pytest, no setup. `REDPEN_CHROMIUM=<path>` points them at a
+pre-installed browser if Playwright's own download isn't available.
+
+`test_headed.py` is a Playwright smoke test that exercises render + export.
+To run it:
 
 ```
 python3 -m http.server 3000 &     # serve the directory
 python3 test_headed.py            # opens a headed Chromium, runs the CUJ
 ```
+
+(`REDPEN_HEADLESS=1 python3 test_headed.py` for CI/sandboxes.)
 
 Manual testing matters more than the smoke test. After any export-touching change, verify a real submission with at least one of each annotation type (span, line-range, block), overlapping annotations, multiple comments per annotation, a `diff` code block, and an overall comment — open the exported file from `file://` and click each highlight.
 

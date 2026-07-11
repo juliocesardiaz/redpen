@@ -33,8 +33,7 @@
       state.submission.language = el.languageSelect.value;
       R.markDirty();
       // Re-render the code view with the newly selected language if code is
-      // already pasted. Annotations would need the same language context, so
-      // in later steps consider whether to lock language alongside code.
+      // already pasted.
       if (state.submission.code) R.renderCodeView();
     });
     el.scoreEarned.addEventListener('input', function () {
@@ -69,11 +68,7 @@
 
   function setOverallView(view) {
     state.overallView = view === 'preview' ? 'preview' : 'edit';
-    document.querySelectorAll('[data-overall-view]').forEach(function (b) {
-      const active = b.dataset.overallView === state.overallView;
-      b.classList.toggle('selected', active);
-      b.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
+    R.selectToggle('data-overall-view', state.overallView);
     if (state.overallView === 'preview') {
       renderOverallPreview();
       el.overallComment.classList.add('hidden');
@@ -118,8 +113,10 @@
     // Delegated handler covers every rendered code block (tooltip, overall
     // preview, comment modal preview). Reads the raw text from the <code>
     // element so syntax-highlighting markup doesn't pollute the clipboard.
+    // Targets the .md-code-copy buttons renderMarkdown emits — the viewer's
+    // own handler is behind the #submission-data guard and never runs here.
     document.addEventListener('click', function (e) {
-      const btn = e.target && e.target.closest && e.target.closest('[data-md-copy]');
+      const btn = e.target && e.target.closest && e.target.closest('.md-code-copy');
       if (!btn) return;
       e.stopPropagation();
       const wrap = btn.closest('.md-code-wrap');
@@ -127,13 +124,7 @@
       const codeEl = wrap.querySelector('pre code');
       if (!codeEl) return;
       const text = codeEl.innerText;
-      const label = btn.querySelector('.md-copy-label');
-      function flash(msg) {
-        if (!label) return;
-        const prev = label.textContent;
-        label.textContent = msg;
-        setTimeout(function () { label.textContent = prev; }, 1200);
-      }
+      function flash(msg) { R.flashText(btn, msg, 1200); }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
           function () { flash('Copied'); },
@@ -254,9 +245,7 @@
 
     el.modalSave.addEventListener('click', R.saveCommentModal);
     el.modalCancel.addEventListener('click', R.closeCommentModal);
-    el.modalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.modalBackdrop) R.closeCommentModal();
-    });
+    R.wireBackdropClose(el.modalBackdrop, R.closeCommentModal);
 
     el.typeSelector.addEventListener('change', function (e) {
       if (e.target && e.target.name === 'annotation-type') R.setSelectedType(e.target.value);
@@ -279,6 +268,7 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         if (!el.tagModalBackdrop.classList.contains('hidden')) { R.closeTagManager(); return; }
+        if (!el.githubModalBackdrop.classList.contains('hidden')) { R.closeGithubModal(); return; }
         if (!el.modalBackdrop.classList.contains('hidden')) R.closeCommentModal();
         if (!el.tooltip.classList.contains('hidden')) R.closeTooltip();
         R.hideCommentButton();
@@ -309,9 +299,7 @@
     });
     el.tagModalClose.addEventListener('click', R.closeTagManager);
     el.btnAddTagRow.addEventListener('click', R.addNewTagRow);
-    el.tagModalBackdrop.addEventListener('click', function (e) {
-      if (e.target === el.tagModalBackdrop) R.closeTagManager();
-    });
+    R.wireBackdropClose(el.tagModalBackdrop, R.closeTagManager);
   }
 
   function resetEverything() {
@@ -354,9 +342,9 @@
     wireCopyButton();
     wireTopbar();
     R.wireImport();
+    R.wireGithubImport();
     R.wireQueueDrawer();
     R.wireAutosave();
-    el.initExportButton();
     R.renderAnnotationList();
     R.renderQueueDrawer();
     R.updateQueueCounter();

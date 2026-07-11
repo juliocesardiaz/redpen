@@ -26,6 +26,7 @@
       <span class="import-group" aria-label="Import">
         <label class="btn btn-small" for="folder-input">Import folder</label>
         <input id="folder-input" class="hidden-input" type="file" webkitdirectory directory multiple />
+        <button id="btn-import-github" class="btn btn-small" type="button">Import from GitHub</button>
         <label id="csv-input-label" class="btn btn-small" for="csv-input" title="CSV columns: username,realname (header optional)">Names CSV</label>
         <input id="csv-input" class="hidden-input" type="file" accept=".csv,text/csv" />
         <button id="btn-prev" class="btn btn-small" type="button" aria-label="Previous submission" disabled>‹</button>
@@ -86,7 +87,7 @@
             <button type="button" class="view-toggle-btn" data-overall-view="preview" role="tab" aria-selected="false">Preview</button>
           </div>
         </div>
-        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback. Markdown supported in step 7; for now, line breaks and basic formatting render as-is."></textarea>
+        <textarea id="overall-comment" class="overall-comment" placeholder="Optional overall feedback. Markdown supported."></textarea>
         <div id="overall-preview" class="overall-preview hidden" aria-live="polite"></div>
       </section>
 
@@ -139,8 +140,59 @@
     </div>
   </div>
 
-  <!-- Comment editor modal. Structure is minimal for step 2; step 3 adds the
-       type selector, step 5 adds tag chips, step 7 adds the markdown preview. -->
+  <!-- GitHub import modal. Three modes: arbitrary GitHub file URLs, CS50
+       submit50 submissions by org/slug/usernames, and the JSON export
+       downloaded from submit.cs50.io. Public files come from
+       raw.githubusercontent.com; everything else (submit50 repos are always
+       private) goes through the GitHub API with a token. Each imported file
+       becomes a queue submission. -->
+  <div id="github-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="github-modal-title">
+    <div class="modal github-modal">
+      <header class="modal-header">
+        <h2 id="github-modal-title" class="modal-title">Import from GitHub</h2>
+      </header>
+      <div class="modal-body">
+        <div class="view-toggle" role="tablist" aria-label="Import mode">
+          <button type="button" class="view-toggle-btn selected" data-import-mode="url" role="tab" aria-selected="true">GitHub URL</button>
+          <button type="button" class="view-toggle-btn" data-import-mode="cs50" role="tab" aria-selected="false">CS50 manual</button>
+          <button type="button" class="view-toggle-btn" data-import-mode="cs50json" role="tab" aria-selected="false">CS50 JSON</button>
+        </div>
+        <div id="github-url-fields" class="import-mode-fields">
+          <label class="field-label" for="github-urls">File URL(s), one per line</label>
+          <textarea id="github-urls" class="github-urls-input" rows="4"
+            placeholder="https://github.com/owner/repo/blob/main/path/to/file.py"></textarea>
+          <p class="modal-hint">Paste a GitHub file URL (the "blob" link from the file view) or a raw.githubusercontent.com URL.</p>
+        </div>
+        <div id="cs50-fields" class="import-mode-fields hidden">
+          <label class="field-label" for="cs50-org">GitHub organization</label>
+          <input id="cs50-org" class="meta-input" type="text" value="me50" autocomplete="off" />
+          <label class="field-label" for="cs50-slug">Problem slug</label>
+          <input id="cs50-slug" class="meta-input" type="text" placeholder="e.g. cs50/problems/2024/x/hello" autocomplete="off" />
+          <label class="field-label" for="cs50-usernames">Student GitHub username(s), one per line</label>
+          <textarea id="cs50-usernames" class="github-urls-input" rows="4" placeholder="alice&#10;bob"></textarea>
+          <p class="modal-hint">Fetches each student's submit50 submission: github.com/&lt;org&gt;/&lt;username&gt;, branch = slug. The likeliest source file is picked automatically and shown after import.</p>
+        </div>
+        <div id="cs50-json-fields" class="import-mode-fields hidden">
+          <label class="btn btn-small" for="cs50-json-input">Choose submissions JSON</label>
+          <input id="cs50-json-input" class="hidden-input" type="file" accept=".json,application/json" />
+          <p id="cs50-json-summary" class="github-modal-status" aria-live="polite"></p>
+          <p class="modal-hint">Use the JSON export downloaded from submit.cs50.io. Each submission is fetched at its exact submitted commit, real names are used when present, and check50 results prefill the score.</p>
+        </div>
+        <label class="field-label" for="github-token">Personal access token (optional for public URLs; required for CS50 — submit50 repos are private)</label>
+        <input id="github-token" class="meta-input github-token-input" type="password" autocomplete="off" placeholder="ghp_..." />
+        <p class="modal-hint">The token is used only for this fetch and is never saved or exported. CS50 modes need a classic token (ghp_…) with the repo scope — fine-grained tokens can't access me50 org repos.</p>
+        <p id="github-modal-status" class="github-modal-status" aria-live="polite"></p>
+      </div>
+      <footer class="modal-footer">
+        <span class="modal-footer-spacer"></span>
+        <button id="github-modal-cancel" class="btn" type="button">Cancel</button>
+        <button id="github-modal-import" class="btn btn-primary" type="button">Import</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Comment editor modal: annotation type selector, tag chips, comment
+       blocks with markdown edit/preview/split views. -->
   <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="comment-modal" class="modal">
       <header class="modal-header">
@@ -236,11 +288,13 @@
         document.head.appendChild(sz);
 
         // Author-mode modules, loaded in dependency order: core sets up the
-        // window.Redpen namespace; autosave loads before main so R.wireAutosave
-        // exists when main's init() runs.
+        // window.Redpen namespace; github needs import's queue/builder
+        // exports; autosave loads before main so R.wireAutosave exists when
+        // main's init() runs.
         var authorFiles = [
           'redpen-author-core.js',
           'redpen-author-import.js',
+          'redpen-author-github.js',
           'redpen-author-comments.js',
           'redpen-author-tags.js',
           'redpen-author-autosave.js',

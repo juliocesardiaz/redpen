@@ -37,15 +37,20 @@ def run_cuj(page):
     print(f"DEBUG #code-lines: {code_lines_html[:50]}")
 
     # Export
-    with page.expect_download() as download_info:
+    with page.expect_download():
         page.locator("#btn-export").click()
-    download = download_info.value
     page.wait_for_timeout(1000)
 
 if __name__ == "__main__":
     check_drift()
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        # Headed by default (this is a watch-it-run tool). REDPEN_HEADLESS=1
+        # runs it in CI/sandboxes; REDPEN_CHROMIUM points at a pre-installed
+        # browser executable.
+        kwargs = {"headless": os.environ.get("REDPEN_HEADLESS") == "1"}
+        if os.environ.get("REDPEN_CHROMIUM"):
+            kwargs["executable_path"] = os.environ["REDPEN_CHROMIUM"]
+        browser = p.chromium.launch(**kwargs)
         page = browser.new_page()
         try:
             run_cuj(page)

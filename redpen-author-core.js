@@ -5,7 +5,8 @@
  * the foundations every other author file builds on: id/model helpers, code
  * rendering, and the empty/rendered view swaps.
  *
- * Load order: core → import → comments → tags → autosave → main. Files share
+ * Load order: core → import → github → comments → tags → autosave → main.
+ * Files share
  * state by mutating window.Redpen.state properties (never module-scope `let`s,
  * which would not cross the <script> boundary). Cross-file calls go through
  * `R.`; within-file calls stay bare.
@@ -30,8 +31,6 @@ window.Redpen = {};
     scoreTotal: document.getElementById('score-total'),
     btnTags: document.getElementById('btn-tags'),
     btnExport: document.getElementById('btn-export'),
-    // Enable export button since it's now implemented
-    initExportButton: function() { const btn = document.getElementById('btn-export'); if(btn) { btn.disabled = false; btn.removeAttribute('title'); } },
     btnNew: document.getElementById('btn-new'),
     codeEmpty: document.getElementById('code-empty'),
     codeInput: document.getElementById('code-input'),
@@ -45,7 +44,6 @@ window.Redpen = {};
     annotationList: document.getElementById('annotation-list'),
     commentBtn: document.getElementById('comment-btn'),
     modalBackdrop: document.getElementById('modal-backdrop'),
-    modal: document.getElementById('comment-modal'),
     modalTitle: document.getElementById('modal-title'),
     modalRange: document.getElementById('modal-range'),
     modalSave: document.getElementById('modal-save'),
@@ -68,6 +66,21 @@ window.Redpen = {};
     tooltipContent: document.getElementById('tooltip-content'),
     folderInput: document.getElementById('folder-input'),
     csvInput: document.getElementById('csv-input'),
+    btnImportGithub: document.getElementById('btn-import-github'),
+    githubModalBackdrop: document.getElementById('github-modal-backdrop'),
+    githubUrls: document.getElementById('github-urls'),
+    githubToken: document.getElementById('github-token'),
+    githubModalStatus: document.getElementById('github-modal-status'),
+    githubModalCancel: document.getElementById('github-modal-cancel'),
+    githubModalImport: document.getElementById('github-modal-import'),
+    githubUrlFields: document.getElementById('github-url-fields'),
+    cs50Fields: document.getElementById('cs50-fields'),
+    cs50Org: document.getElementById('cs50-org'),
+    cs50Slug: document.getElementById('cs50-slug'),
+    cs50Usernames: document.getElementById('cs50-usernames'),
+    cs50JsonFields: document.getElementById('cs50-json-fields'),
+    cs50JsonInput: document.getElementById('cs50-json-input'),
+    cs50JsonSummary: document.getElementById('cs50-json-summary'),
     btnPrev: document.getElementById('btn-prev'),
     btnNext: document.getElementById('btn-next'),
     queueCounter: document.getElementById('queue-counter'),
@@ -198,6 +211,34 @@ window.Redpen = {};
   }
 
   // ------------------------------------------------------------------
+  // Shared UI idioms (used by several author modules)
+  // ------------------------------------------------------------------
+
+  // Mark the button whose data-* attribute equals `value` as selected
+  // (visual + aria) among all buttons carrying that attribute.
+  function selectToggle(attr, value, root) {
+    (root || document).querySelectorAll('[' + attr + ']').forEach(function (b) {
+      const active = b.getAttribute(attr) === value;
+      b.classList.toggle('selected', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
+  // Close a modal when the dimmed backdrop itself (not the dialog) is clicked.
+  function wireBackdropClose(backdrop, close) {
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) close();
+    });
+  }
+
+  // Temporarily swap a node's text (status feedback), restoring after ms.
+  function flashText(node, msg, ms) {
+    const prev = node.textContent;
+    node.textContent = msg;
+    setTimeout(function () { node.textContent = prev; }, ms);
+  }
+
+  // ------------------------------------------------------------------
   // Highlight.js configuration + code rendering
   // ------------------------------------------------------------------
 
@@ -221,6 +262,20 @@ window.Redpen = {};
       html = window.RedpenShared.escapeHtml(source);
     }
     return splitHighlightedByLines(html);
+  }
+
+  // Highlight tokens depend only on (code, language); annotation wrapping is
+  // a separate pass over the split lines. Cache the last result so annotation
+  // add/delete/tag edits don't pay a full re-highlight of the file. The
+  // cached line strings are never mutated (the wrap pass builds new strings),
+  // so handing out the same array is safe.
+  let highlightCache = { code: null, language: null, lines: null };
+
+  function highlightByLinesCached(source, language) {
+    if (highlightCache.code !== source || highlightCache.language !== language) {
+      highlightCache = { code: source, language: language, lines: highlightByLines(source, language) };
+    }
+    return highlightCache.lines;
   }
 
   /**
@@ -295,7 +350,7 @@ window.Redpen = {};
     const savedSubmission = state.submission;
     state.submission = submission;
     try {
-      const lineHtmls = highlightByLines(code, submission.language);
+      const lineHtmls = highlightByLinesCached(code, submission.language);
 
       // Apply annotation wrappers per line. Widest first so the bigger range
       // becomes the outer <span> and smaller ranges nest inside it — this is
@@ -526,6 +581,9 @@ window.Redpen = {};
   R.getAnnotationById = getAnnotationById;
   R.getTagById = getTagById;
   R.cssEscape = cssEscape;
+  R.selectToggle = selectToggle;
+  R.wireBackdropClose = wireBackdropClose;
+  R.flashText = flashText;
   R.renderCodeView = renderCodeView;
   R.showEmptyView = showEmptyView;
   R.showRenderedView = showRenderedView;
