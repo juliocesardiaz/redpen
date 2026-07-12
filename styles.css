@@ -22,6 +22,7 @@
   --code-line-height: 1.55;
   --gutter-w: 48px;
   --queue-drawer-w: 260px;
+  --queue-peek-w: 24px; /* sliver of the collapsed drawer left on screen */
 }
 
 * { box-sizing: border-box; }
@@ -156,6 +157,9 @@ body {
   min-height: 0;
   overflow: hidden;
   transition: margin-left 200ms ease;
+  /* Keep clear of the collapsed queue drawer's peek rail, which is
+     position:fixed and would otherwise clip the code toolbar text. */
+  margin-left: var(--queue-peek-w);
 }
 
 /* When the submissions drawer is expanded, give the workspace a left margin
@@ -1216,8 +1220,9 @@ body.queue-open .workspace {
 }
 .markdown-body .md-code-pre {
   margin: 0;
-  padding: 12px;
-  padding-right: 72px; /* leave room for language label + copy button */
+  /* Top padding clears the language label / copy button strip so long code
+     lines can use the full width without sliding under them. */
+  padding: 30px 12px 12px;
   overflow-x: auto;
   background: transparent;
   max-width: 100%;
@@ -1352,7 +1357,7 @@ body.queue-open .workspace {
 }
 
 .queue-drawer.collapsed {
-  transform: translateX(calc(-100% + 24px));
+  transform: translateX(calc(-100% + var(--queue-peek-w)));
 }
 
 .queue-drawer-handle {

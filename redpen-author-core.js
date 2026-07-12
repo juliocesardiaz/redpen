@@ -196,18 +196,11 @@ window.Redpen = {};
   }
 
   function getAnnotationById(id) {
-    for (const a of state.submission.annotations) if (a.id === id) return a;
-    return null;
+    return window.RedpenShared.findById(state.submission.annotations, id);
   }
 
   function getTagById(id) {
-    for (const t of state.submission.tags) if (t.id === id) return t;
-    return null;
-  }
-
-  function cssEscape(s) {
-    if (window.CSS && CSS.escape) return CSS.escape(s);
-    return String(s).replace(/"/g, '\\"');
+    return window.RedpenShared.findById(state.submission.tags, id);
   }
 
   // ------------------------------------------------------------------
@@ -580,7 +573,9 @@ window.Redpen = {};
   R.findNameInCsv = findNameInCsv;
   R.getAnnotationById = getAnnotationById;
   R.getTagById = getTagById;
-  R.cssEscape = cssEscape;
+  // viewer-runtime.js loads before every author module, so the shared copy
+  // is always present here.
+  R.cssEscape = window.RedpenShared.cssEscape;
   R.selectToggle = selectToggle;
   R.wireBackdropClose = wireBackdropClose;
   R.flashText = flashText;

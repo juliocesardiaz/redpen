@@ -180,20 +180,14 @@
   // Comment editor modal
   // ------------------------------------------------------------------
 
-  function openCommentModal(range) {
-    if (!range) return;
-    state.editingAnnotationId = null;
-    state.editingRange = range;
-    state.editingBlocks = [blankBlock()];
-    state.editingTagIds = [];
-    el.modalTitle.textContent = 'Add comment';
+  // Shared tail of both modal-open paths: header text, type radio, delete
+  // button visibility, then the full redraw + open + focus. Draft state
+  // (editingRange / editingBlocks / editingTagIds) is set by the caller first.
+  function presentCommentModal(title, range, type, canDelete) {
+    el.modalTitle.textContent = title;
     el.modalRange.textContent = formatRangeLabel(range);
-    // Auto-suggest the type: single line → span, multi-line → line range.
-    // Block is always manual — the teacher opts into it when they want the
-    // left-border treatment for a structured region.
-    const suggested = range.startLine === range.endLine ? 'span' : 'line-range';
-    setSelectedType(suggested);
-    el.btnDeleteAnnotation.classList.add('hidden');
+    setSelectedType(type);
+    el.btnDeleteAnnotation.classList.toggle('hidden', !canDelete);
     R.hideNewTagForm();
     setModalView('edit');
     R.renderTagChips();
@@ -201,6 +195,19 @@
     updateSaveButton();
     el.modalBackdrop.classList.remove('hidden');
     setTimeout(function () { focusFirstBlockTextarea(); }, 0);
+  }
+
+  function openCommentModal(range) {
+    if (!range) return;
+    state.editingAnnotationId = null;
+    state.editingRange = range;
+    state.editingBlocks = [blankBlock()];
+    state.editingTagIds = [];
+    // Auto-suggest the type: single line → span, multi-line → line range.
+    // Block is always manual — the teacher opts into it when they want the
+    // left-border treatment for a structured region.
+    const suggested = range.startLine === range.endLine ? 'span' : 'line-range';
+    presentCommentModal('Add comment', range, suggested, false);
   }
 
   function openCommentModalForEdit(annotationId) {
@@ -214,17 +221,7 @@
     });
     if (state.editingBlocks.length === 0) state.editingBlocks = [blankBlock()];
     state.editingTagIds = (a.tagIds || []).slice();
-    el.modalTitle.textContent = 'Edit annotation';
-    el.modalRange.textContent = formatRangeLabel(a.range);
-    setSelectedType(a.type);
-    el.btnDeleteAnnotation.classList.remove('hidden');
-    R.hideNewTagForm();
-    setModalView('edit');
-    R.renderTagChips();
-    renderCommentBlocks();
-    updateSaveButton();
-    el.modalBackdrop.classList.remove('hidden');
-    setTimeout(function () { focusFirstBlockTextarea(); }, 0);
+    presentCommentModal('Edit annotation', a.range, a.type, true);
   }
 
   function blankBlock() {
@@ -592,12 +589,19 @@
       a.tagIds = tagIds;
     }
 
-    R.markDirty();
     closeCommentModal();
     closeTooltip();
     hideCommentButton();
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
+    commitAnnotationsChange();
+  }
+
+  // Every annotation mutation ends the same way: persist, re-render the code
+  // view (wrappers may have changed), refresh the sidebar, and update the
+  // lock/edit toolbar state.
+  function commitAnnotationsChange() {
+    R.markDirty();
     R.renderCodeView();
     renderAnnotationList();
     R.updateToolbarStatus();
@@ -609,23 +613,17 @@
     if (!ok) return;
     const id = state.editingAnnotationId;
     state.submission.annotations = state.submission.annotations.filter(function (a) { return a.id !== id; });
-    R.markDirty();
     closeCommentModal();
     closeTooltip();
-    R.renderCodeView();
-    renderAnnotationList();
-    R.updateToolbarStatus();
+    commitAnnotationsChange();
   }
 
   function deleteAnnotationById(id) {
     const ok = window.confirm('Delete this annotation?');
     if (!ok) return;
     state.submission.annotations = state.submission.annotations.filter(function (a) { return a.id !== id; });
-    R.markDirty();
     if (el.tooltip.dataset.annotationId === id) closeTooltip();
-    R.renderCodeView();
-    renderAnnotationList();
-    R.updateToolbarStatus();
+    commitAnnotationsChange();
   }
 
   function formatRangeLabel(r) {
@@ -661,33 +659,21 @@
     el.tooltip.dataset.annotationId = '';
   }
 
+  // Author-mode tag pill: CSS-variable driven, unlike the viewer's inline
+  // colors. `small` picks the sidebar's compact variant.
+  function makeTagPill(t, small) {
+    const pill = document.createElement('span');
+    pill.className = small ? 'tag-pill tag-pill-sm' : 'tag-pill';
+    pill.style.setProperty('--tag-color', t.color);
+    pill.textContent = t.label;
+    return pill;
+  }
+
   function renderTooltipContent(annotation) {
-    el.tooltipContent.innerHTML = '';
-    if (annotation.tagIds && annotation.tagIds.length > 0) {
-      const row = document.createElement('div');
-      row.className = 'tooltip-tags';
-      for (const id of annotation.tagIds) {
-        const t = R.getTagById(id);
-        if (!t) continue;
-        const pill = document.createElement('span');
-        pill.className = 'tag-pill';
-        pill.style.setProperty('--tag-color', t.color);
-        pill.textContent = t.label;
-        row.appendChild(pill);
-      }
-      if (row.children.length > 0) el.tooltipContent.appendChild(row);
-    }
-    for (let i = 0; i < annotation.comments.length; i++) {
-      if (i > 0) {
-        const hr = document.createElement('hr');
-        hr.className = 'tooltip-divider';
-        el.tooltipContent.appendChild(hr);
-      }
-      const body = document.createElement('div');
-      body.className = 'tooltip-comment markdown-body';
-      body.innerHTML = window.RedpenShared.renderMarkdown(annotation.comments[i].text);
-      el.tooltipContent.appendChild(body);
-    }
+    window.RedpenShared.renderTooltipContent(
+      el.tooltipContent, annotation, R.getTagById,
+      function (t) { return makeTagPill(t, false); }
+    );
   }
 
   function repositionTooltipIfOpen() {
@@ -761,12 +747,7 @@
       pills.className = 'annotation-tags';
       for (const id of a.tagIds) {
         const t = R.getTagById(id);
-        if (!t) continue;
-        const pill = document.createElement('span');
-        pill.className = 'tag-pill tag-pill-sm';
-        pill.style.setProperty('--tag-color', t.color);
-        pill.textContent = t.label;
-        pills.appendChild(pill);
+        if (t) pills.appendChild(makeTagPill(t, true));
       }
       if (pills.children.length > 0) head.appendChild(pills);
     }

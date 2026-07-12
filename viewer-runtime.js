@@ -4,15 +4,25 @@
   'use strict';
 
   function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, function (c) {
+    return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
-  function escapeAttr(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
+  // Same escaping suffices for attribute values; the separate name keeps
+  // call sites self-documenting.
+  const escapeAttr = escapeHtml;
+
+  function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return String(s).replace(/"/g, '\\"');
+  }
+
+  function findById(list, id) {
+    for (let i = 0; i < (list ? list.length : 0); i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
   }
 
   // Aliases map user-written fence languages onto hljs grammar names. Any
@@ -115,6 +125,78 @@
   // ------------------------------------------------------------------
 
   /**
+   * Fill a tooltip's content element for an annotation: optional tag row,
+   * then each comment rendered as markdown with dividers between. The two
+   * modes style tag pills differently (author: .tag-pill + --tag-color;
+   * viewer: .tag-chip with inline colors), so the pill factory is injected.
+   */
+  function renderTooltipContent(contentEl, annotation, getTagById, makeTagPill) {
+    contentEl.innerHTML = '';
+    if (annotation.tagIds && annotation.tagIds.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'tooltip-tags';
+      for (const id of annotation.tagIds) {
+        const t = getTagById(id);
+        if (t) row.appendChild(makeTagPill(t));
+      }
+      if (row.children.length > 0) contentEl.appendChild(row);
+    }
+    const comments = annotation.comments || [];
+    for (let i = 0; i < comments.length; i++) {
+      if (i > 0) {
+        const hr = document.createElement('hr');
+        hr.className = 'tooltip-divider';
+        contentEl.appendChild(hr);
+      }
+      const body = document.createElement('div');
+      body.className = 'tooltip-comment markdown-body';
+      const c = comments[i];
+      body.innerHTML = renderMarkdown(typeof c === 'string' ? c : (c && c.text) || '');
+      contentEl.appendChild(body);
+    }
+  }
+
+  /**
+   * Delegated handler for the Copy buttons renderMarkdown emits on fenced
+   * code blocks (tooltips, previews, the exported viewer). Reads the raw
+   * text from the <code> element so highlight markup doesn't pollute the
+   * clipboard; falls back to execCommand for browsers without the async
+   * clipboard API.
+   */
+  function wireCopyButtons() {
+    document.addEventListener('click', function (e) {
+      const btn = e.target && e.target.closest && e.target.closest('.md-code-copy');
+      if (!btn) return;
+      e.stopPropagation();
+      const wrap = btn.closest('.md-code-wrap');
+      const codeEl = wrap && wrap.querySelector('pre code');
+      if (!codeEl) return;
+      const text = codeEl.innerText;
+      function flash(msg) {
+        const prev = btn.textContent;
+        btn.textContent = msg;
+        setTimeout(function () { btn.textContent = prev; }, 1200);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { flash('Copied'); },
+          function () { flash('Failed'); }
+        );
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); flash('Copied'); }
+        catch (_) { flash('Failed'); }
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
+  /**
    * Position the tooltip element relative to its anchor. Author and viewer
    * shared this responsibility but had drifted: the author version handled
    * mobile centering, max-height capping when neither below/above fits, and
@@ -213,13 +295,57 @@
     return null;
   }
 
+  /**
+   * Cross-element hover sync, used by both author mode and the viewer.
+   * A single annotation often becomes several sibling .annotation spans
+   * (hljs token boundaries split them, multi-line ranges produce one segment
+   * per line). Driving the highlight from per-element :hover would only
+   * light up the segment under the cursor; drive it from a JS-managed
+   * .hovered class so every segment (and, for a line-level annotation,
+   * every row in the range) responds as a single unit.
+   */
+  function wireHoverSync(codeRoot, getAnnotationById) {
+    let hoveredId = null;
+    function applyHovered(id) {
+      const parts = codeRoot.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
+      parts.forEach(function (p) { p.classList.add('hovered'); });
+      const a = getAnnotationById(id);
+      if (a && (a.type === 'line-range' || a.type === 'block')) {
+        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
+          const row = codeRoot.querySelector('.line[data-line="' + ln + '"]');
+          if (row) row.classList.add('hovered');
+        }
+      }
+    }
+    function clearHovered() {
+      const parts = codeRoot.querySelectorAll('.annotation.hovered, .line.hovered');
+      parts.forEach(function (p) { p.classList.remove('hovered'); });
+    }
+    function setHovered(id) {
+      if (id === hoveredId) return;
+      clearHovered();
+      hoveredId = id;
+      if (id) applyHovered(id);
+    }
+    codeRoot.addEventListener('mousemove', function (e) {
+      const hit = resolveAnnotationFromTarget(e.target, codeRoot);
+      setHovered(hit ? hit.id : null);
+    });
+    codeRoot.addEventListener('mouseleave', function () { setHovered(null); });
+  }
+
   // Expose to window for author mode to use as well
   window.RedpenShared = {
     escapeHtml: escapeHtml,
     escapeAttr: escapeAttr,
+    cssEscape: cssEscape,
+    findById: findById,
     renderMarkdown: renderMarkdown,
+    renderTooltipContent: renderTooltipContent,
     positionTooltip: positionTooltip,
     resolveAnnotationFromTarget: resolveAnnotationFromTarget,
+    wireHoverSync: wireHoverSync,
+    wireCopyButtons: wireCopyButtons,
   };
 
   // ------------------------------------------------------------------
@@ -244,24 +370,16 @@
     }
 
     wireTooltip();
-    wireCopyButton();
+    wireCopyButtons();
     wireAnnotations();
   }
 
   function getAnnotationById(id) {
-    if (!submission) return null;
-    for (let i = 0; i < submission.annotations.length; i++) {
-      if (submission.annotations[i].id === id) return submission.annotations[i];
-    }
-    return null;
+    return submission ? findById(submission.annotations, id) : null;
   }
 
   function getTagById(id) {
-    if (!submission) return null;
-    for (let i = 0; i < submission.tags.length; i++) {
-      if (submission.tags[i].id === id) return submission.tags[i];
-    }
-    return null;
+    return submission ? findById(submission.tags, id) : null;
   }
 
   function closeTooltip() {
@@ -269,54 +387,24 @@
     tooltip.dataset.annotationId = '';
   }
 
+  function makeTagPill(t) {
+    const pill = document.createElement('span');
+    pill.className = 'tag-chip';
+    pill.style.backgroundColor = t.color;
+    pill.style.color = '#fff';
+    pill.textContent = t.label;
+    return pill;
+  }
+
   function populateTooltip(annotationId) {
     const a = getAnnotationById(annotationId);
     if (!a) return;
-
-    tooltipContent.innerHTML = '';
-
-    if (a.tagIds && a.tagIds.length > 0) {
-      const row = document.createElement('div');
-      row.className = 'tooltip-tags';
-      for (let i = 0; i < a.tagIds.length; i++) {
-        const t = getTagById(a.tagIds[i]);
-        if (t) {
-          const pill = document.createElement('span');
-          pill.className = 'tag-chip';
-          pill.style.backgroundColor = t.color;
-          pill.style.color = '#fff';
-          pill.textContent = t.label;
-          row.appendChild(pill);
-        }
-      }
-      if (row.children.length > 0) tooltipContent.appendChild(row);
-    }
-
-    if (a.comments && a.comments.length > 0) {
-      for (let i = 0; i < a.comments.length; i++) {
-        if (i > 0) {
-          const hr = document.createElement('hr');
-          hr.className = 'tooltip-divider';
-          tooltipContent.appendChild(hr);
-        }
-        const body = document.createElement('div');
-        body.className = 'tooltip-comment markdown-body';
-        const c = a.comments[i];
-        const text = typeof c === 'string' ? c : (c && c.text) || '';
-        body.innerHTML = renderMarkdown(text);
-        tooltipContent.appendChild(body);
-      }
-    }
+    renderTooltipContent(tooltipContent, a, getTagById, makeTagPill);
   }
 
   function showTooltipAt(anchor) {
     tooltip.classList.remove('hidden');
     positionTooltip(tooltip, anchor);
-  }
-
-  function cssEscape(s) {
-    if (window.CSS && CSS.escape) return CSS.escape(s);
-    return String(s).replace(/"/g, '\\"');
   }
 
   function wireAnnotations() {
@@ -336,40 +424,7 @@
       }
     });
 
-    // Cross-element hover sync. A single annotation often becomes several
-    // sibling .annotation spans (hljs token boundaries split them, multi-
-    // line ranges produce one segment per line). Driving the highlight
-    // from per-element :hover would only light up the segment under the
-    // cursor; drive it from a JS-managed .hovered class so every segment
-    // (and, for a line-level annotation, every row in the range) responds
-    // as a single unit.
-    let hoveredId = null;
-    function applyHovered(id) {
-      const parts = codeView.querySelectorAll('[data-annotation-id="' + cssEscape(id) + '"]');
-      parts.forEach(function (p) { p.classList.add('hovered'); });
-      const a = getAnnotationById(id);
-      if (a && (a.type === 'line-range' || a.type === 'block')) {
-        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
-          const row = codeView.querySelector('.line[data-line="' + ln + '"]');
-          if (row) row.classList.add('hovered');
-        }
-      }
-    }
-    function clearHovered() {
-      const parts = codeView.querySelectorAll('.annotation.hovered, .line.hovered');
-      parts.forEach(function (p) { p.classList.remove('hovered'); });
-    }
-    function setHovered(id) {
-      if (id === hoveredId) return;
-      clearHovered();
-      hoveredId = id;
-      if (id) applyHovered(id);
-    }
-    codeView.addEventListener('mousemove', function (e) {
-      const hit = resolveAnnotationFromTarget(e.target, codeView);
-      setHovered(hit ? hit.id : null);
-    });
-    codeView.addEventListener('mouseleave', function () { setHovered(null); });
+    wireHoverSync(codeView, getAnnotationById);
   }
 
   function wireTooltip() {
@@ -389,39 +444,15 @@
       }
     });
 
-    window.addEventListener('resize', function () {
+    function repositionIfOpen() {
       if (tooltip.classList.contains('hidden')) return;
       const id = tooltip.dataset.annotationId;
-      if (id) {
-        const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) showTooltipAt(hit);
-      }
-    });
-
-    window.addEventListener('scroll', function () {
-      if (tooltip.classList.contains('hidden')) return;
-      const id = tooltip.dataset.annotationId;
-      if (id) {
-        const hit = document.querySelector('.annotation[data-annotation-id="' + id + '"]');
-        if (hit) showTooltipAt(hit);
-      }
-    });
-  }
-
-  function wireCopyButton() {
-    document.addEventListener('click', function (e) {
-      if (e.target && e.target.classList.contains('md-code-copy')) {
-        const pre = e.target.nextElementSibling;
-        if (pre && pre.tagName === 'PRE') {
-          navigator.clipboard.writeText(pre.textContent).then(function () {
-            const btn = e.target;
-            const old = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(function () { btn.textContent = old; }, 2000);
-          });
-        }
-      }
-    });
+      if (!id) return;
+      const hit = document.querySelector('.annotation[data-annotation-id="' + cssEscape(id) + '"]');
+      if (hit) showTooltipAt(hit);
+    }
+    window.addEventListener('resize', repositionIfOpen);
+    window.addEventListener('scroll', repositionIfOpen);
   }
 
   if (document.readyState === 'loading') {

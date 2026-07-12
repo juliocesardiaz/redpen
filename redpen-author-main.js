@@ -22,8 +22,9 @@
     el.studentName.addEventListener('input', function () {
       state.submission.studentName = el.studentName.value;
       R.markDirty();
-      R.renderQueueDrawer();
-      R.updateQueueCounter();
+      // Only the active entry's label can change here — skip rebuilding the
+      // whole drawer list on every keystroke.
+      R.updateActiveQueueLabel();
     });
     el.assignmentName.addEventListener('input', function () {
       state.submission.assignmentName = el.assignmentName.value;
@@ -36,15 +37,13 @@
       // already pasted.
       if (state.submission.code) R.renderCodeView();
     });
-    el.scoreEarned.addEventListener('input', function () {
-      const v = el.scoreEarned.value === '' ? null : Number(el.scoreEarned.value);
-      state.submission.score.earned = Number.isFinite(v) ? v : null;
-      R.markDirty();
-    });
-    el.scoreTotal.addEventListener('input', function () {
-      const v = el.scoreTotal.value === '' ? null : Number(el.scoreTotal.value);
-      state.submission.score.total = Number.isFinite(v) ? v : null;
-      R.markDirty();
+    [[el.scoreEarned, 'earned'], [el.scoreTotal, 'total']].forEach(function (pair) {
+      const input = pair[0], key = pair[1];
+      input.addEventListener('input', function () {
+        const v = input.value === '' ? null : Number(input.value);
+        state.submission.score[key] = Number.isFinite(v) ? v : null;
+        R.markDirty();
+      });
     });
     el.overallComment.addEventListener('input', function () {
       state.submission.overallComment = el.overallComment.value;
@@ -109,42 +108,6 @@
     el.btnEditCode.addEventListener('click', R.returnToEdit);
   }
 
-  function wireCopyButton() {
-    // Delegated handler covers every rendered code block (tooltip, overall
-    // preview, comment modal preview). Reads the raw text from the <code>
-    // element so syntax-highlighting markup doesn't pollute the clipboard.
-    // Targets the .md-code-copy buttons renderMarkdown emits — the viewer's
-    // own handler is behind the #submission-data guard and never runs here.
-    document.addEventListener('click', function (e) {
-      const btn = e.target && e.target.closest && e.target.closest('.md-code-copy');
-      if (!btn) return;
-      e.stopPropagation();
-      const wrap = btn.closest('.md-code-wrap');
-      if (!wrap) return;
-      const codeEl = wrap.querySelector('pre code');
-      if (!codeEl) return;
-      const text = codeEl.innerText;
-      function flash(msg) { R.flashText(btn, msg, 1200); }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(
-          function () { flash('Copied'); },
-          function () { flash('Failed'); }
-        );
-      } else {
-        // Legacy fallback for browsers without the async clipboard API.
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed'; ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); flash('Copied'); }
-        catch (_) { flash('Failed'); }
-        document.body.removeChild(ta);
-      }
-    });
-  }
-
   function wireTooltip() {
     // Click inside the code view opens/toggles the tooltip for the resolved
     // annotation. Use event.target directly so the innermost annotation wins.
@@ -164,37 +127,10 @@
     });
 
     // Cross-element hover: a span annotation that crosses hljs token
-    // boundaries becomes several sibling <span>s. Rather than relying on
-    // :hover (which fires per-element) we track the annotation under the
-    // cursor and toggle a .hovered class on every DOM element that shares
-    // the id, plus the .line rows for a line-level annotation's full range.
-    let hoveredAnnotationId = null;
-    function applyHovered(id) {
-      const parts = el.codeLines.querySelectorAll('[data-annotation-id="' + R.cssEscape(id) + '"]');
-      parts.forEach(function (p) { p.classList.add('hovered'); });
-      const a = R.getAnnotationById(id);
-      if (a && (a.type === 'line-range' || a.type === 'block')) {
-        for (let ln = a.range.startLine; ln <= a.range.endLine; ln++) {
-          const row = el.codeLines.querySelector('.line[data-line="' + ln + '"]');
-          if (row) row.classList.add('hovered');
-        }
-      }
-    }
-    function clearHovered() {
-      const parts = el.codeLines.querySelectorAll('.annotation.hovered, .line.hovered');
-      parts.forEach(function (p) { p.classList.remove('hovered'); });
-    }
-    function setHovered(id) {
-      if (id === hoveredAnnotationId) return;
-      clearHovered();
-      hoveredAnnotationId = id;
-      if (id) applyHovered(id);
-    }
-    el.codeLines.addEventListener('mousemove', function (e) {
-      const hit = R.resolveAnnotationForClick(e.target);
-      setHovered(hit ? hit.id : null);
-    });
-    el.codeLines.addEventListener('mouseleave', function () { setHovered(null); });
+    // boundaries becomes several sibling <span>s. The shared helper tracks
+    // the annotation under the cursor and toggles .hovered on every element
+    // that shares its id (same behaviour as the exported viewer).
+    window.RedpenShared.wireHoverSync(el.codeLines, R.getAnnotationById);
 
     // Clicks anywhere else close the tooltip — but not clicks inside the
     // tooltip itself (so a student can select text inside to copy).
@@ -306,22 +242,12 @@
     Object.assign(state.submission, R.newSubmission());
     state.queue = [state.submission];
     state.activeIdx = 0;
-    el.studentName.value = '';
-    el.assignmentName.value = '';
-    el.languageSelect.value = 'python';
-    el.scoreEarned.value = '';
-    el.scoreTotal.value = '';
-    el.overallComment.value = '';
-    el.codeInput.value = '';
-    setOverallView('edit');
     R.closeCommentModal();
     R.closeTooltip();
     R.hideCommentButton();
-    R.renderAnnotationList();
-    R.renderQueueDrawer();
-    R.updateQueueCounter();
-    R.updateExportAllButton();
-    R.showEmptyView();
+    // Repopulates every metadata input and the code view from the fresh
+    // submission — the same path queue switching uses.
+    R.loadSubmissionIntoUI();
     R.clearAutosaveDraft();
     R.resetAutosaveTimers();
   }
@@ -339,7 +265,10 @@
     wireCodeInput();
     wireSelectionAndModal();
     wireTooltip();
-    wireCopyButton();
+    // Covers every rendered code block (tooltip, overall preview, comment
+    // modal preview) — the viewer's own call is behind the #submission-data
+    // guard and never runs here.
+    window.RedpenShared.wireCopyButtons();
     wireTopbar();
     R.wireImport();
     R.wireGithubImport();
