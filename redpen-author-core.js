@@ -67,6 +67,7 @@ window.Redpen = {};
     folderInput: document.getElementById('folder-input'),
     csvInput: document.getElementById('csv-input'),
     btnImportGithub: document.getElementById('btn-import-github'),
+    btnEmptyGithub: document.getElementById('btn-empty-github'),
     githubModalBackdrop: document.getElementById('github-modal-backdrop'),
     githubUrls: document.getElementById('github-urls'),
     githubToken: document.getElementById('github-token'),

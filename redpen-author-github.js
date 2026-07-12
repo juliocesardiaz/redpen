@@ -433,5 +433,6 @@
   }
 
   R.wireGithubImport = wireGithubImport;
+  R.openGithubModal = openGithubModal;
   R.closeGithubModal = closeGithubModal;
 })();

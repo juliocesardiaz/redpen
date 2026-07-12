@@ -407,6 +407,7 @@
   R.wireImport = wireImport;
   R.wireQueueDrawer = wireQueueDrawer;
   R.appendToQueue = appendToQueue;
+  R.importFolder = importFolder;
   R.splitExt = splitExt;
   R.isTextFilename = isTextFilename;
   R.buildQueueSubmission = buildQueueSubmission;

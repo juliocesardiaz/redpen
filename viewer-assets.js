@@ -19,8 +19,9 @@
   --text: #1f2328;
   --text-muted: #5b6472;
   --text-faint: #8a93a1;
-  --accent: #2b6cb0;
-  --accent-strong: #1e4e8c;
+  /* Brand red, matching author mode — used for links in rendered feedback. */
+  --accent: #c0392b;
+  --accent-strong: #922b21;
   --danger: #c0392b;
   --redpen: #c0392b;
   --shadow-sm: 0 1px 2px rgba(16, 22, 26, 0.08);

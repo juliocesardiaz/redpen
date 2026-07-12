@@ -108,6 +108,64 @@
     el.btnEditCode.addEventListener('click', R.returnToEdit);
   }
 
+  function wireEmptyState() {
+    el.btnEmptyGithub.addEventListener('click', R.openGithubModal);
+
+    // Drag & drop import. Scoped to the empty panel so a stray drop can't
+    // dump files into an in-progress grading session.
+    const zone = el.codeEmpty;
+    let dragDepth = 0; // enter/leave fire per child element; track nesting
+    zone.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      dragDepth++;
+      zone.classList.add('dragover');
+    });
+    zone.addEventListener('dragover', function (e) { e.preventDefault(); });
+    zone.addEventListener('dragleave', function () {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) zone.classList.remove('dragover');
+    });
+    zone.addEventListener('drop', async function (e) {
+      e.preventDefault();
+      dragDepth = 0;
+      zone.classList.remove('dragover');
+      let files;
+      try {
+        files = await collectDroppedFiles(e.dataTransfer);
+      } catch (err) {
+        console.warn('redpen: reading dropped items failed', err);
+        return;
+      }
+      if (files.length) await R.importFolder(files);
+    });
+  }
+
+  // Dropped folders arrive as directory entries that must be walked
+  // recursively (readEntries returns results in batches until empty); plain
+  // files come straight off dataTransfer.files. webkitGetAsEntry is the only
+  // cross-browser way to tell the two apart.
+  async function collectDroppedFiles(dt) {
+    const entries = Array.from(dt.items || [])
+      .map(function (item) { return item.webkitGetAsEntry ? item.webkitGetAsEntry() : null; })
+      .filter(Boolean);
+    if (!entries.length) return Array.from(dt.files || []);
+    const out = [];
+    async function walk(entry) {
+      if (entry.isFile) {
+        out.push(await new Promise(function (res, rej) { entry.file(res, rej); }));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let batch;
+        do {
+          batch = await new Promise(function (res, rej) { reader.readEntries(res, rej); });
+          for (const child of batch) await walk(child);
+        } while (batch.length);
+      }
+    }
+    for (const entry of entries) await walk(entry);
+    return out;
+  }
+
   function wireTooltip() {
     // Click inside the code view opens/toggles the tooltip for the resolved
     // annotation. Use event.target directly so the innermost annotation wins.
@@ -263,6 +321,7 @@
     }
     wireMetadata();
     wireCodeInput();
+    wireEmptyState();
     wireSelectionAndModal();
     wireTooltip();
     // Covers every rendered code block (tooltip, overall preview, comment
