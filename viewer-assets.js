@@ -302,8 +302,9 @@ html, body {
 }
 .markdown-body .md-code-pre {
   margin: 0;
-  padding: 12px;
-  padding-right: 72px;
+  /* Top padding clears the language label / copy button strip so long code
+     lines can use the full width without sliding under them. */
+  padding: 30px 12px 12px;
   overflow-x: auto;
   background: transparent;
   max-width: 100%;
@@ -515,7 +516,9 @@ html, body {
   .print-annotation-body { margin-left: 14px; font-size: 10pt; line-height: 1.4; }
   .print-annotation-body .markdown-body p { margin: 0 0 4px 0; }
   .print-annotation-body .md-code-copy { display: none; }
-  .print-annotation-body .md-code-pre { padding-right: 12px; }
+  /* Copy button is hidden in print, so the reserved top strip collapses too;
+     the small language label alone doesn't need it. */
+  .print-annotation-body .md-code-pre { padding: 12px; }
 }
 `;
 

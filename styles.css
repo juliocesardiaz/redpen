@@ -1216,8 +1216,9 @@ body.queue-open .workspace {
 }
 .markdown-body .md-code-pre {
   margin: 0;
-  padding: 12px;
-  padding-right: 72px; /* leave room for language label + copy button */
+  /* Top padding clears the language label / copy button strip so long code
+     lines can use the full width without sliding under them. */
+  padding: 30px 12px 12px;
   overflow-x: auto;
   background: transparent;
   max-width: 100%;
