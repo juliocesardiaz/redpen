@@ -196,13 +196,11 @@ window.Redpen = {};
   }
 
   function getAnnotationById(id) {
-    for (const a of state.submission.annotations) if (a.id === id) return a;
-    return null;
+    return window.RedpenShared.findById(state.submission.annotations, id);
   }
 
   function getTagById(id) {
-    for (const t of state.submission.tags) if (t.id === id) return t;
-    return null;
+    return window.RedpenShared.findById(state.submission.tags, id);
   }
 
   // ------------------------------------------------------------------

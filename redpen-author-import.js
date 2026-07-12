@@ -230,6 +230,16 @@
     return real || username || '(unnamed)';
   }
 
+  // Cheap per-keystroke refresh for the student-name input: only the active
+  // entry's label and the counter can change, so skip rebuilding the drawer.
+  function updateActiveQueueLabel() {
+    if (el.queueList) {
+      const nameSpan = el.queueList.querySelector('.queue-item.active .queue-item-name');
+      if (nameSpan) nameSpan.textContent = displayLabel(state.submission);
+    }
+    updateQueueCounter();
+  }
+
   function updateQueueCounter() {
     if (!el.queueCounter) return;
     if (state.queue.length <= 1) {
@@ -391,6 +401,7 @@
 
   R.renderQueueDrawer = renderQueueDrawer;
   R.updateQueueCounter = updateQueueCounter;
+  R.updateActiveQueueLabel = updateActiveQueueLabel;
   R.updateExportAllButton = updateExportAllButton;
   R.loadSubmissionIntoUI = loadSubmissionIntoUI;
   R.wireImport = wireImport;

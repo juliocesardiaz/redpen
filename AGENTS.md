@@ -72,10 +72,13 @@ styles.css              Author-mode styles only. Viewer styles live separately.
 exporter.js             Builds the exported HTML string from `submission` +
                         live `#code-lines` innerHTML, then triggers download.
 viewer-runtime.js       Runs in BOTH modes. Exposes window.RedpenShared
-                        (escapeHtml, escapeAttr, renderMarkdown) for author mode.
-                        The viewer-init block (tooltip wiring, click handlers)
-                        early-returns if `#submission-data` is absent — author
-                        mode never hits it.
+                        (escapeHtml/escapeAttr, cssEscape, findById,
+                        renderMarkdown, renderTooltipContent, positionTooltip,
+                        resolveAnnotationFromTarget, wireHoverSync,
+                        wireCopyButtons) for author mode. The viewer-init
+                        block (tooltip wiring, click handlers) early-returns
+                        if `#submission-data` is absent — author mode never
+                        hits it.
 viewer-template.html    Reference copy of the export template. The actual
                         template the exporter uses is the string baked into
                         viewer-assets.js — keep them in sync if you edit either.

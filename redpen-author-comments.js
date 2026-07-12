@@ -659,33 +659,21 @@
     el.tooltip.dataset.annotationId = '';
   }
 
+  // Author-mode tag pill: CSS-variable driven, unlike the viewer's inline
+  // colors. `small` picks the sidebar's compact variant.
+  function makeTagPill(t, small) {
+    const pill = document.createElement('span');
+    pill.className = small ? 'tag-pill tag-pill-sm' : 'tag-pill';
+    pill.style.setProperty('--tag-color', t.color);
+    pill.textContent = t.label;
+    return pill;
+  }
+
   function renderTooltipContent(annotation) {
-    el.tooltipContent.innerHTML = '';
-    if (annotation.tagIds && annotation.tagIds.length > 0) {
-      const row = document.createElement('div');
-      row.className = 'tooltip-tags';
-      for (const id of annotation.tagIds) {
-        const t = R.getTagById(id);
-        if (!t) continue;
-        const pill = document.createElement('span');
-        pill.className = 'tag-pill';
-        pill.style.setProperty('--tag-color', t.color);
-        pill.textContent = t.label;
-        row.appendChild(pill);
-      }
-      if (row.children.length > 0) el.tooltipContent.appendChild(row);
-    }
-    for (let i = 0; i < annotation.comments.length; i++) {
-      if (i > 0) {
-        const hr = document.createElement('hr');
-        hr.className = 'tooltip-divider';
-        el.tooltipContent.appendChild(hr);
-      }
-      const body = document.createElement('div');
-      body.className = 'tooltip-comment markdown-body';
-      body.innerHTML = window.RedpenShared.renderMarkdown(annotation.comments[i].text);
-      el.tooltipContent.appendChild(body);
-    }
+    window.RedpenShared.renderTooltipContent(
+      el.tooltipContent, annotation, R.getTagById,
+      function (t) { return makeTagPill(t, false); }
+    );
   }
 
   function repositionTooltipIfOpen() {
@@ -759,12 +747,7 @@
       pills.className = 'annotation-tags';
       for (const id of a.tagIds) {
         const t = R.getTagById(id);
-        if (!t) continue;
-        const pill = document.createElement('span');
-        pill.className = 'tag-pill tag-pill-sm';
-        pill.style.setProperty('--tag-color', t.color);
-        pill.textContent = t.label;
-        pills.appendChild(pill);
+        if (t) pills.appendChild(makeTagPill(t, true));
       }
       if (pills.children.length > 0) head.appendChild(pills);
     }

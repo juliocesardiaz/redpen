@@ -18,6 +18,13 @@
     return String(s).replace(/"/g, '\\"');
   }
 
+  function findById(list, id) {
+    for (let i = 0; i < (list ? list.length : 0); i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+
   // Aliases map user-written fence languages onto hljs grammar names. Any
   // language not listed (and any unknown name) falls back to plain monospace.
   // 'html' aliases to 'xml' — hljs ships HTML as its xml grammar, so a ```html
@@ -116,6 +123,78 @@
   // ------------------------------------------------------------------
   // Shared tooltip helpers (used by both author mode and the viewer)
   // ------------------------------------------------------------------
+
+  /**
+   * Fill a tooltip's content element for an annotation: optional tag row,
+   * then each comment rendered as markdown with dividers between. The two
+   * modes style tag pills differently (author: .tag-pill + --tag-color;
+   * viewer: .tag-chip with inline colors), so the pill factory is injected.
+   */
+  function renderTooltipContent(contentEl, annotation, getTagById, makeTagPill) {
+    contentEl.innerHTML = '';
+    if (annotation.tagIds && annotation.tagIds.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'tooltip-tags';
+      for (const id of annotation.tagIds) {
+        const t = getTagById(id);
+        if (t) row.appendChild(makeTagPill(t));
+      }
+      if (row.children.length > 0) contentEl.appendChild(row);
+    }
+    const comments = annotation.comments || [];
+    for (let i = 0; i < comments.length; i++) {
+      if (i > 0) {
+        const hr = document.createElement('hr');
+        hr.className = 'tooltip-divider';
+        contentEl.appendChild(hr);
+      }
+      const body = document.createElement('div');
+      body.className = 'tooltip-comment markdown-body';
+      const c = comments[i];
+      body.innerHTML = renderMarkdown(typeof c === 'string' ? c : (c && c.text) || '');
+      contentEl.appendChild(body);
+    }
+  }
+
+  /**
+   * Delegated handler for the Copy buttons renderMarkdown emits on fenced
+   * code blocks (tooltips, previews, the exported viewer). Reads the raw
+   * text from the <code> element so highlight markup doesn't pollute the
+   * clipboard; falls back to execCommand for browsers without the async
+   * clipboard API.
+   */
+  function wireCopyButtons() {
+    document.addEventListener('click', function (e) {
+      const btn = e.target && e.target.closest && e.target.closest('.md-code-copy');
+      if (!btn) return;
+      e.stopPropagation();
+      const wrap = btn.closest('.md-code-wrap');
+      const codeEl = wrap && wrap.querySelector('pre code');
+      if (!codeEl) return;
+      const text = codeEl.innerText;
+      function flash(msg) {
+        const prev = btn.textContent;
+        btn.textContent = msg;
+        setTimeout(function () { btn.textContent = prev; }, 1200);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { flash('Copied'); },
+          function () { flash('Failed'); }
+        );
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); flash('Copied'); }
+        catch (_) { flash('Failed'); }
+        document.body.removeChild(ta);
+      }
+    });
+  }
 
   /**
    * Position the tooltip element relative to its anchor. Author and viewer
@@ -260,10 +339,13 @@
     escapeHtml: escapeHtml,
     escapeAttr: escapeAttr,
     cssEscape: cssEscape,
+    findById: findById,
     renderMarkdown: renderMarkdown,
+    renderTooltipContent: renderTooltipContent,
     positionTooltip: positionTooltip,
     resolveAnnotationFromTarget: resolveAnnotationFromTarget,
     wireHoverSync: wireHoverSync,
+    wireCopyButtons: wireCopyButtons,
   };
 
   // ------------------------------------------------------------------
@@ -288,24 +370,16 @@
     }
 
     wireTooltip();
-    wireCopyButton();
+    wireCopyButtons();
     wireAnnotations();
   }
 
   function getAnnotationById(id) {
-    if (!submission) return null;
-    for (let i = 0; i < submission.annotations.length; i++) {
-      if (submission.annotations[i].id === id) return submission.annotations[i];
-    }
-    return null;
+    return submission ? findById(submission.annotations, id) : null;
   }
 
   function getTagById(id) {
-    if (!submission) return null;
-    for (let i = 0; i < submission.tags.length; i++) {
-      if (submission.tags[i].id === id) return submission.tags[i];
-    }
-    return null;
+    return submission ? findById(submission.tags, id) : null;
   }
 
   function closeTooltip() {
@@ -313,44 +387,19 @@
     tooltip.dataset.annotationId = '';
   }
 
+  function makeTagPill(t) {
+    const pill = document.createElement('span');
+    pill.className = 'tag-chip';
+    pill.style.backgroundColor = t.color;
+    pill.style.color = '#fff';
+    pill.textContent = t.label;
+    return pill;
+  }
+
   function populateTooltip(annotationId) {
     const a = getAnnotationById(annotationId);
     if (!a) return;
-
-    tooltipContent.innerHTML = '';
-
-    if (a.tagIds && a.tagIds.length > 0) {
-      const row = document.createElement('div');
-      row.className = 'tooltip-tags';
-      for (let i = 0; i < a.tagIds.length; i++) {
-        const t = getTagById(a.tagIds[i]);
-        if (t) {
-          const pill = document.createElement('span');
-          pill.className = 'tag-chip';
-          pill.style.backgroundColor = t.color;
-          pill.style.color = '#fff';
-          pill.textContent = t.label;
-          row.appendChild(pill);
-        }
-      }
-      if (row.children.length > 0) tooltipContent.appendChild(row);
-    }
-
-    if (a.comments && a.comments.length > 0) {
-      for (let i = 0; i < a.comments.length; i++) {
-        if (i > 0) {
-          const hr = document.createElement('hr');
-          hr.className = 'tooltip-divider';
-          tooltipContent.appendChild(hr);
-        }
-        const body = document.createElement('div');
-        body.className = 'tooltip-comment markdown-body';
-        const c = a.comments[i];
-        const text = typeof c === 'string' ? c : (c && c.text) || '';
-        body.innerHTML = renderMarkdown(text);
-        tooltipContent.appendChild(body);
-      }
-    }
+    renderTooltipContent(tooltipContent, a, getTagById, makeTagPill);
   }
 
   function showTooltipAt(anchor) {
@@ -404,22 +453,6 @@
     }
     window.addEventListener('resize', repositionIfOpen);
     window.addEventListener('scroll', repositionIfOpen);
-  }
-
-  function wireCopyButton() {
-    document.addEventListener('click', function (e) {
-      if (e.target && e.target.classList.contains('md-code-copy')) {
-        const pre = e.target.nextElementSibling;
-        if (pre && pre.tagName === 'PRE') {
-          navigator.clipboard.writeText(pre.textContent).then(function () {
-            const btn = e.target;
-            const old = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(function () { btn.textContent = old; }, 2000);
-          });
-        }
-      }
-    });
   }
 
   if (document.readyState === 'loading') {

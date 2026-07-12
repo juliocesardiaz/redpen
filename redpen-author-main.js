@@ -22,8 +22,9 @@
     el.studentName.addEventListener('input', function () {
       state.submission.studentName = el.studentName.value;
       R.markDirty();
-      R.renderQueueDrawer();
-      R.updateQueueCounter();
+      // Only the active entry's label can change here — skip rebuilding the
+      // whole drawer list on every keystroke.
+      R.updateActiveQueueLabel();
     });
     el.assignmentName.addEventListener('input', function () {
       state.submission.assignmentName = el.assignmentName.value;
@@ -36,15 +37,13 @@
       // already pasted.
       if (state.submission.code) R.renderCodeView();
     });
-    el.scoreEarned.addEventListener('input', function () {
-      const v = el.scoreEarned.value === '' ? null : Number(el.scoreEarned.value);
-      state.submission.score.earned = Number.isFinite(v) ? v : null;
-      R.markDirty();
-    });
-    el.scoreTotal.addEventListener('input', function () {
-      const v = el.scoreTotal.value === '' ? null : Number(el.scoreTotal.value);
-      state.submission.score.total = Number.isFinite(v) ? v : null;
-      R.markDirty();
+    [[el.scoreEarned, 'earned'], [el.scoreTotal, 'total']].forEach(function (pair) {
+      const input = pair[0], key = pair[1];
+      input.addEventListener('input', function () {
+        const v = input.value === '' ? null : Number(input.value);
+        state.submission.score[key] = Number.isFinite(v) ? v : null;
+        R.markDirty();
+      });
     });
     el.overallComment.addEventListener('input', function () {
       state.submission.overallComment = el.overallComment.value;
@@ -107,42 +106,6 @@
     });
 
     el.btnEditCode.addEventListener('click', R.returnToEdit);
-  }
-
-  function wireCopyButton() {
-    // Delegated handler covers every rendered code block (tooltip, overall
-    // preview, comment modal preview). Reads the raw text from the <code>
-    // element so syntax-highlighting markup doesn't pollute the clipboard.
-    // Targets the .md-code-copy buttons renderMarkdown emits — the viewer's
-    // own handler is behind the #submission-data guard and never runs here.
-    document.addEventListener('click', function (e) {
-      const btn = e.target && e.target.closest && e.target.closest('.md-code-copy');
-      if (!btn) return;
-      e.stopPropagation();
-      const wrap = btn.closest('.md-code-wrap');
-      if (!wrap) return;
-      const codeEl = wrap.querySelector('pre code');
-      if (!codeEl) return;
-      const text = codeEl.innerText;
-      function flash(msg) { R.flashText(btn, msg, 1200); }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(
-          function () { flash('Copied'); },
-          function () { flash('Failed'); }
-        );
-      } else {
-        // Legacy fallback for browsers without the async clipboard API.
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed'; ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); flash('Copied'); }
-        catch (_) { flash('Failed'); }
-        document.body.removeChild(ta);
-      }
-    });
   }
 
   function wireTooltip() {
@@ -302,7 +265,10 @@
     wireCodeInput();
     wireSelectionAndModal();
     wireTooltip();
-    wireCopyButton();
+    // Covers every rendered code block (tooltip, overall preview, comment
+    // modal preview) — the viewer's own call is behind the #submission-data
+    // guard and never runs here.
+    window.RedpenShared.wireCopyButtons();
     wireTopbar();
     R.wireImport();
     R.wireGithubImport();
