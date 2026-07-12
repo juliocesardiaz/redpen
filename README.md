@@ -12,6 +12,18 @@ A lightweight, zero-setup tool for grading student code submissions with inline 
 - **Author mode** — The grading app itself. A teacher uses this to load student code, highlight specific regions, write markdown comments, add tags, and export the graded file.
 - **Viewer mode** — The exported HTML file. This is a self-contained, read-only document that the student opens in any browser to see their grade and click on highlights to read feedback.
 
+### Author mode — grading
+
+A CS50 `faces.py` submission mid-grading: block, line-range, and span annotations with color-coded tags, a feedback tooltip with a suggested change, the annotation list, and the overall comment preview.
+
+<img src="assets/screenshot-author.png" alt="Author mode: grading a faces.py submission with inline annotations, tags, a code suggestion tooltip, and the overall comment preview" width="100%">
+
+### Viewer mode — what the student receives
+
+The same submission as the exported, self-contained HTML file: score badge, overall feedback, highlighted code, and click-to-open tooltips.
+
+<img src="assets/screenshot-viewer.png" alt="Viewer mode: the exported HTML with the student's score, overall feedback, highlighted code, and an open feedback tooltip showing a suggested change" width="100%">
+
 ## Features
 
 - **Inline Annotations**: Highlight exact characters (spans), multiple lines, or entire structural blocks of code.
