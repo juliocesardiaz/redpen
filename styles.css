@@ -58,6 +58,16 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+  /* Buttons never wrap (see .btn) and the height is fixed (the queue drawer
+     hangs off --topbar-h), so when width truly runs out the bar scrolls
+     sideways instead of pushing controls off-screen. */
+  overflow-x: auto;
+}
+
+/* The name inputs are the flexible part of the row: let them shrink (down
+   to a usable floor) before anything else has to give. */
+.topbar input[type="text"].meta-input {
+  min-width: 90px;
 }
 
 .topbar-group {
@@ -121,6 +131,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Topbar is a nowrap flex row: when width runs out, items shrink to
+     min-content and multi-word captions ("Import folder") wrap into tall
+     two-line boxes. Forbid wrapping so a .btn is always one line tall. */
+  white-space: nowrap;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -1329,6 +1343,9 @@ body.queue-open .workspace {
 
 .queue-counter {
   display: inline-block;
+  /* Reserve width only while showing "Student i/N: name" so the arrows don't
+     jitter as the label changes; a lone submission renders no counter and
+     shouldn't cost the topbar 160px. */
   min-width: 160px;
   padding: 0 4px;
   font-family: var(--mono);
@@ -1337,6 +1354,10 @@ body.queue-open .workspace {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.queue-counter:empty {
+  min-width: 0;
+  padding: 0;
 }
 
 /* --- Queue drawer ----------------------------------------------------- */
