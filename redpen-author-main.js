@@ -203,9 +203,14 @@
 
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
+        if (!el.snippetModalBackdrop.classList.contains('hidden')) { R.closeSnippetManager(); return; }
         if (!el.tagModalBackdrop.classList.contains('hidden')) { R.closeTagManager(); return; }
         if (!el.githubModalBackdrop.classList.contains('hidden')) { R.closeGithubModal(); return; }
-        if (!el.modalBackdrop.classList.contains('hidden')) R.closeCommentModal();
+        if (!el.modalBackdrop.classList.contains('hidden')) {
+          // First Esc closes just the snippet picker; the next one the modal.
+          if (R.hideSnippetPicker()) return;
+          R.closeCommentModal();
+        }
         if (!el.tooltip.classList.contains('hidden')) R.closeTooltip();
         R.hideCommentButton();
       }
@@ -273,6 +278,7 @@
     R.wireImport();
     R.wireGithubImport();
     R.wireQueueDrawer();
+    R.wireSnippets();
     R.wireAutosave();
     R.renderAnnotationList();
     R.renderQueueDrawer();

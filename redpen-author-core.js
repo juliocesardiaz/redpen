@@ -5,7 +5,8 @@
  * the foundations every other author file builds on: id/model helpers, code
  * rendering, and the empty/rendered view swaps.
  *
- * Load order: core → import → github → comments → tags → autosave → main.
+ * Load order: core → import → github → comments → tags → snippets →
+ * autosave → main.
  * Files share
  * state by mutating window.Redpen.state properties (never module-scope `let`s,
  * which would not cross the <script> boundary). Cross-file calls go through
@@ -95,6 +96,18 @@ window.Redpen = {};
     restoreBannerMsg: document.getElementById('restore-banner-msg'),
     restoreBannerRestore: document.getElementById('restore-banner-restore'),
     restoreBannerDiscard: document.getElementById('restore-banner-discard'),
+    btnSnippets: document.getElementById('btn-snippets'),
+    snippetModalBackdrop: document.getElementById('snippet-modal-backdrop'),
+    snippetRows: document.getElementById('snippet-rows'),
+    btnAddSnippetRow: document.getElementById('btn-add-snippet-row'),
+    snippetModalClose: document.getElementById('snippet-modal-close'),
+    snippetMdInput: document.getElementById('snippet-md-input'),
+    snippetImportStatus: document.getElementById('snippet-import-status'),
+    btnInsertSnippet: document.getElementById('btn-insert-snippet'),
+    snippetPicker: document.getElementById('snippet-picker'),
+    snippetPickerFilter: document.getElementById('snippet-picker-filter'),
+    snippetPickerList: document.getElementById('snippet-picker-list'),
+    snippetPickerManage: document.getElementById('snippet-picker-manage'),
   };
   R.el = el;
 

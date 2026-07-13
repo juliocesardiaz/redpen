@@ -38,6 +38,7 @@
       <span id="autosave-status" class="autosave-status" aria-live="polite" title="Autosave status"></span>
       <button id="btn-backup-file" class="btn btn-small hidden" type="button" title="Choose a file on disk to keep in sync with your grading work">Enable backup file</button>
       <button id="btn-tags" class="btn" type="button">Tags</button>
+      <button id="btn-snippets" class="btn" type="button">Snippets</button>
       <button id="btn-export" class="btn btn-primary" type="button" >Export HTML</button>
       <button id="btn-export-all" class="btn" type="button" disabled title="Import a folder to enable batch export">Export all</button>
       <button id="btn-new" class="btn" type="button">New</button>
@@ -223,7 +224,16 @@
           </div>
         </div>
         <div id="comment-blocks" class="comment-blocks" data-view="edit"></div>
-        <button id="btn-add-comment" class="btn-ghost" type="button">+ Add another comment</button>
+        <div class="modal-ghost-row">
+          <button id="btn-add-comment" class="btn-ghost" type="button">+ Add another comment</button>
+          <button id="btn-insert-snippet" class="btn-ghost" type="button">+ Insert snippet</button>
+        </div>
+        <div id="snippet-picker" class="snippet-picker hidden">
+          <input id="snippet-picker-filter" class="snippet-picker-filter" type="text"
+                 placeholder="Filter snippets… (Enter inserts the top match)" autocomplete="off" />
+          <div id="snippet-picker-list" class="snippet-picker-list"></div>
+          <button id="snippet-picker-manage" class="btn-ghost" type="button">Manage snippets…</button>
+        </div>
         <p class="modal-hint">Tab indents. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>E</kbd> toggles preview.</p>
       </div>
       <footer class="modal-footer">
@@ -231,6 +241,32 @@
         <span class="modal-footer-spacer"></span>
         <button id="modal-cancel" class="btn" type="button">Cancel</button>
         <button id="modal-save" class="btn btn-primary" type="button">Save</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Snippet manager modal. Top-bar "Snippets" button opens this; snippets
+       are the teacher's reusable comment library — saved in this browser
+       (localStorage), shared across submissions, never exported. Sits after
+       the comment modal in the DOM so it stacks above it when opened from
+       the picker's "Manage snippets…" button. -->
+  <div id="snippet-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="snippet-modal-title">
+    <div class="modal snippet-modal">
+      <header class="modal-header">
+        <h2 id="snippet-modal-title" class="modal-title">Comment snippets</h2>
+      </header>
+      <div class="modal-body">
+        <p class="modal-hint">Reusable comments, saved in this browser and available on every submission. Insert them from the comment editor via “+ Insert snippet”.</p>
+        <div id="snippet-rows" class="snippet-rows"></div>
+        <button id="btn-add-snippet-row" class="btn-ghost" type="button">+ New snippet</button>
+        <p class="modal-hint">Already keep your go-to comments in a file? Import a Markdown file: each heading starts a snippet (heading = title, text under it = the comment). A file of bullet points, or of paragraphs separated by blank lines, works too — one snippet per bullet/paragraph.</p>
+        <p id="snippet-import-status" class="snippet-import-status" aria-live="polite"></p>
+      </div>
+      <footer class="modal-footer">
+        <label class="btn btn-small" for="snippet-md-input">Import .md file</label>
+        <input id="snippet-md-input" class="hidden-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" />
+        <span class="modal-footer-spacer"></span>
+        <button id="snippet-modal-close" class="btn btn-primary" type="button">Done</button>
       </footer>
     </div>
   </div>
@@ -297,6 +333,7 @@
           'redpen-author-github.js',
           'redpen-author-comments.js',
           'redpen-author-tags.js',
+          'redpen-author-snippets.js',
           'redpen-author-autosave.js',
           'redpen-author-main.js',
         ];

@@ -25,7 +25,7 @@ These are non-negotiable. Push back on the user before breaking any of them.
 ```
 index.html              Author-mode shell. Loads scripts in order:
                         viewer-assets.js → viewer-runtime.js → exporter.js →
-                        vendor/jszip.min.js → the seven author-mode modules.
+                        vendor/jszip.min.js → the author-mode modules below.
 redpen-author-core.js   Author-mode module 1/7. Creates window.Redpen, the
                         shared state object, the el DOM-ref table, model
                         helpers, code rendering, view swaps, and the shared
@@ -63,6 +63,18 @@ redpen-author-comments.js  Author-mode module 4/7. Selection → range, the
                         sidebar annotation list.
 redpen-author-tags.js   Author-mode module 5/7. Tag chips in the modal,
                         standalone tag manager, primary tag lookup.
+redpen-author-snippets.js  Author-mode module (loads between tags and
+                        autosave). The comment snippet library: reusable
+                        comments persisted app-level in localStorage
+                        (redpen.snippets.v1) — not per-submission, never
+                        exported. Owns the "Snippets" manager modal
+                        (edit/delete rows, import from a Markdown file:
+                        headings → title+body, else bullets, else
+                        paragraphs; fenced code never splits a snippet)
+                        and the "+ Insert snippet" picker in the comment
+                        editor, which inserts at the cursor by dispatching
+                        'input' on the block textarea so the comments
+                        module's own listener updates draft state.
 redpen-author-autosave.js  Author-mode module 6/7. Debounced localStorage
                         autosave, opt-in File System Access backup file,
                         restore banner. Must load before main.
@@ -107,7 +119,11 @@ tests/                  Headless behavioral suites (plain python3, no
                         pytest): test_import_url.py and test_import_cs50.py
                         pin the import modal's contract — DOM ids, status
                         strings, queue semantics, auto-pick order, token
-                        handling. Self-serving (ephemeral-port http.server);
+                        handling. test_snippets.py pins the snippet
+                        library's contract — markdown parsing shapes,
+                        manager CRUD + localStorage persistence, .md import
+                        dedupe, picker insert/filter.
+                        Self-serving (ephemeral-port http.server);
                         fetch is stubbed in-page so they run offline.
                         fixtures/cs50_export_sample.json is a synthesized
                         submit.cs50.io export (fake usernames — never commit
@@ -202,6 +218,7 @@ Run them after any change touching import, the queue, or the modal:
 ```
 python3 tests/test_import_url.py     # GitHub URL mode
 python3 tests/test_import_cs50.py    # CS50 manual + JSON modes
+python3 tests/test_snippets.py       # comment snippet library
 ```
 
 They start their own server (ephemeral port) and stub `fetch` in-page — no

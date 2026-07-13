@@ -30,6 +30,7 @@ The same submission as the exported, self-contained HTML file: score badge, over
 - **Markdown Support**: Write formatting, lists, links, and code snippets inside your comments.
 - **Code Suggestions**: Attach a before/after change suggestion to any comment — it renders as a colorized diff.
 - **Color-coded Tags**: Categorize your feedback (e.g., "Logic", "Style", "Good") with customizable color tags.
+- **Comment Snippets**: Build a personal library of reusable comments and insert them into any annotation with one click. Already keep your go-to comments in a file? Import them from a Markdown file in one go.
 - **Grade a Whole Class**: Import a folder of submissions, GitHub file URLs, or CS50 (submit50) submissions into a queue and step through students one by one.
 - **Names CSV**: Map GitHub usernames to real student names with a simple CSV.
 - **Batch Export**: Export every graded submission in the queue as a zip of HTML files in one click.
@@ -62,7 +63,8 @@ With more than one submission loaded, use the **‹ ›** arrows in the top bar 
    - Choose the annotation type (span, line range, or block), write your feedback in markdown, and apply relevant tags.
    - Optionally click **"+ Add code suggestion"** to attach a before/after diff.
 3. **Manage Tags**: Click **"Tags"** in the top bar to rename, recolor, delete, or create tags.
-4. **General Feedback**: You can also provide an overall assignment comment in the right sidebar.
+4. **Reuse Comments**: Click **"+ Insert snippet"** in the comment editor to drop in a saved comment at the cursor. Click **"Snippets"** in the top bar to manage your library or import one from a Markdown file — each heading becomes a snippet (heading = title, text below = the comment); files of bullet points or blank-line-separated paragraphs work too. Snippets are saved in your browser and available on every submission.
+5. **General Feedback**: You can also provide an overall assignment comment in the right sidebar.
 
 Your work autosaves to the browser as you grade — if the tab closes or crashes, a restore banner offers your draft back on the next visit. For extra safety, click **"Enable backup file"** (Chrome/Edge) to keep a file on disk continuously in sync.
 
