@@ -23,6 +23,15 @@
 
   {{OVERALL_COMMENT}}
 
+  <!-- One-time discoverability hint; the runtime shows it only when the
+       submission has annotations and hides it permanently once dismissed
+       or once any highlight is clicked. -->
+  <div id="viewer-hint" class="viewer-hint hidden" role="status">
+    <span aria-hidden="true">💡</span>
+    <span>Click highlighted code to read your teacher's feedback</span>
+    <button id="viewer-hint-dismiss" class="viewer-hint-dismiss" type="button" aria-label="Dismiss hint">×</button>
+  </div>
+
   <main class="code-view">
     <pre class="code-pre"><code class="code-lines hljs">{{CODE_BODY}}</code></pre>
   </main>
@@ -31,6 +40,16 @@
   <div class="print-annotations hidden-screen" id="print-annotations">
     {{PRINT_ANNOTATIONS}}
   </div>
+
+  <footer class="viewer-footer">graded with <span class="viewer-footer-brand">redpen</span></footer>
+
+  <!-- Prev/next walk through annotations in document order; the runtime
+       unhides it when there are at least two. -->
+  <nav id="anno-nav" class="anno-nav hidden" aria-label="Annotation navigation">
+    <button id="anno-nav-prev" class="anno-nav-btn" type="button" aria-label="Previous annotation">‹</button>
+    <span id="anno-nav-counter" class="anno-nav-counter" aria-live="polite"></span>
+    <button id="anno-nav-next" class="anno-nav-btn" type="button" aria-label="Next annotation">›</button>
+  </nav>
 
   <div class="tooltip hidden" id="tooltip">
     <span class="tooltip-arrow" aria-hidden="true"></span>

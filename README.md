@@ -76,6 +76,6 @@ Grading a queue? **"Export all"** downloads every submission as one zip of HTML 
 ### 5. Viewing Feedback (Student)
 When the student receives the file:
 1. They double-click it to open it in their own browser — no internet needed.
-2. They will see their code with highlighted sections.
-3. Clicking on any highlighted text will pop up a tooltip containing the teacher's exact feedback.
+2. They will see their code with highlighted sections, their score (color-tinted by grade), and a one-time hint that highlights are clickable.
+3. Clicking on any highlighted text will pop up a tooltip containing the teacher's exact feedback, and the ‹ › arrows in the corner walk through every annotation in order.
 4. Printing the page turns the annotations into numbered footnotes.
