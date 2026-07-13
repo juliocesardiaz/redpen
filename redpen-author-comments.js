@@ -189,6 +189,7 @@
     setSelectedType(type);
     el.btnDeleteAnnotation.classList.toggle('hidden', !canDelete);
     R.hideNewTagForm();
+    R.hideSnippetPicker();
     setModalView('edit');
     R.renderTagChips();
     renderCommentBlocks();
@@ -255,6 +256,7 @@
   function closeCommentModal() {
     el.modalBackdrop.classList.add('hidden');
     R.hideNewTagForm();
+    R.hideSnippetPicker();
     state.editingRange = null;
     state.editingAnnotationId = null;
     state.editingBlocks = [];

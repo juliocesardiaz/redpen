@@ -1523,3 +1523,154 @@ body.queue-open .workspace {
   gap: 6px;
   flex: none;
 }
+
+/* --- Comment snippet library ------------------------------------------ */
+
+.snippet-modal { max-width: 620px; }
+
+.snippet-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.snippet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.snippet-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Same quiet-until-focused treatment as .tag-label-input in the tag manager. */
+.snippet-title-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.snippet-title-input:hover { background: var(--bg-muted); }
+.snippet-title-input:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.snippet-text-input {
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+}
+.snippet-text-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.snippet-import-status {
+  margin: 0;
+  min-height: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
+/* --- Snippet picker inside the comment editor ---- */
+
+.modal-ghost-row {
+  display: flex;
+  gap: 8px;
+}
+
+.snippet-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+}
+
+.snippet-picker-filter {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.snippet-picker-filter:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.snippet-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.snippet-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.snippet-pick:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+}
+
+.snippet-pick-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.snippet-pick-preview {
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
