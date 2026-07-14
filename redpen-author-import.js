@@ -113,7 +113,9 @@
       return keep;
     });
     if (!files.length) {
-      alert('No supported text files found in the picked folder.');
+      // Reached from both the folder picker and drag-and-drop — keep the
+      // wording source-neutral.
+      alert('No supported text files found in the selection.');
       return;
     }
     if (files.length > 100) {
@@ -322,6 +324,15 @@
   // in-progress grading session.
   function wireDropZone() {
     const zone = el.codeEmpty;
+
+    // A drop anywhere else would make the browser navigate to the dropped
+    // file, replacing the app (and the grading session) — swallow drags
+    // globally and signal no-drop outside the zone.
+    window.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (!zone.contains(e.target) && e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    });
+    window.addEventListener('drop', function (e) { e.preventDefault(); });
     let dragDepth = 0; // enter/leave fire per child element; track nesting
     zone.addEventListener('dragenter', function (e) {
       e.preventDefault();
