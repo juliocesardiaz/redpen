@@ -56,15 +56,31 @@
   <main class="workspace">
     <section class="code-column" aria-label="Code">
       <div id="code-empty" class="code-empty">
+        <div class="empty-hero">
+          <span class="empty-hero-glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21l1.2-4L17.3 3.9a2.1 2.1 0 0 1 2.8 2.8L7.2 20 3 21z"/>
+              <path d="M15.6 5.6l2.8 2.8"/>
+            </svg>
+          </span>
+          <h2 class="empty-hero-title">Grade a submission</h2>
+          <p class="empty-hero-sub">Paste code below — it renders as soon as you paste. Or bring in a whole class:</p>
+          <div class="empty-hero-actions">
+            <label class="btn" for="folder-input">Import folder</label>
+            <button id="btn-empty-github" class="btn" type="button">Import from GitHub</button>
+          </div>
+        </div>
         <textarea
           id="code-input"
           class="code-input"
-          placeholder="Paste student code here&#10;&#10;Choose the language in the top bar, then paste. The code will render with syntax highlighting and line numbers."
+          placeholder="Paste student code here — choose the language in the top bar."
           spellcheck="false"
           autocomplete="off"
           autocapitalize="off"
         ></textarea>
         <div class="code-empty-actions">
+          <span class="empty-drop-hint">…or drop student files or a folder anywhere in this panel</span>
           <button id="btn-render" class="btn btn-primary" type="button">Render code</button>
         </div>
       </div>

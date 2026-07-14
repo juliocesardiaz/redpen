@@ -408,6 +408,7 @@
 
   function wireGithubImport() {
     el.btnImportGithub.addEventListener('click', openGithubModal);
+    el.btnEmptyGithub.addEventListener('click', openGithubModal);
     el.githubModalCancel.addEventListener('click', closeGithubModal);
     el.githubModalImport.addEventListener('click', runImport);
     R.wireBackdropClose(el.githubModalBackdrop, closeGithubModal);

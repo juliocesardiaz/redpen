@@ -32,7 +32,8 @@ redpen-author-core.js   Author-mode module 1/7. Creates window.Redpen, the
                         UI idioms (R.selectToggle, R.wireBackdropClose,
                         R.flashText) the other modules reuse.
 redpen-author-import.js Author-mode module 2/7. Multi-submission queue,
-                        folder/CSV import, queue drawer, batch export. Also
+                        folder/CSV import, the empty-panel drag-and-drop
+                        zone, queue drawer, batch export. Also
                         owns the shared seam every import source feeds:
                         R.appendToQueue plus R.buildQueueSubmission /
                         R.splitExt / R.isTextFilename (the one place a raw
