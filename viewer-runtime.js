@@ -25,6 +25,14 @@
     return null;
   }
 
+  // Document order for annotations: first line, then start column. Shared by
+  // the author sidebar list and the viewer's prev/next navigation so the two
+  // orderings can't drift.
+  function annotationOrder(a, b) {
+    if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
+    return (a.range.startCol || 0) - (b.range.startCol || 0);
+  }
+
   // Aliases map user-written fence languages onto hljs grammar names. Any
   // language not listed (and any unknown name) falls back to plain monospace.
   // 'html' aliases to 'xml' — hljs ships HTML as its xml grammar, so a ```html
@@ -340,6 +348,7 @@
     escapeAttr: escapeAttr,
     cssEscape: cssEscape,
     findById: findById,
+    annotationOrder: annotationOrder,
     renderMarkdown: renderMarkdown,
     renderTooltipContent: renderTooltipContent,
     positionTooltip: positionTooltip,
@@ -357,6 +366,7 @@
   let submission = null;
   const tooltip = document.getElementById('tooltip');
   const tooltipContent = document.getElementById('tooltip-content');
+  const annoNav = document.getElementById('anno-nav');
 
   function initViewer() {
     const dataEl = document.getElementById('submission-data');
@@ -411,14 +421,10 @@
   let navIdx = -1;
 
   function wireAnnotationNav() {
-    const nav = document.getElementById('anno-nav');
-    if (!nav || !submission) return;
-    orderedAnnotations = (submission.annotations || []).slice().sort(function (a, b) {
-      if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
-      return (a.range.startCol || 0) - (b.range.startCol || 0);
-    });
+    if (!annoNav || !submission) return;
+    orderedAnnotations = (submission.annotations || []).slice().sort(annotationOrder);
     if (orderedAnnotations.length < 2) return; // arrows are pointless for 0-1
-    nav.classList.remove('hidden');
+    annoNav.classList.remove('hidden');
     updateNavCounter();
     document.getElementById('anno-nav-prev').addEventListener('click', function () { stepAnnotation(-1); });
     document.getElementById('anno-nav-next').addEventListener('click', function () { stepAnnotation(1); });
@@ -426,14 +432,22 @@
 
   function stepAnnotation(delta) {
     const n = orderedAnnotations.length;
-    navIdx = navIdx === -1 ? (delta > 0 ? 0 : n - 1) : (navIdx + delta + n) % n;
-    const a = orderedAnnotations[navIdx];
-    const seg = document.querySelector('.annotation[data-annotation-id="' + cssEscape(a.id) + '"]');
-    if (!seg) return;
-    seg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const idx = navIdx === -1 ? (delta > 0 ? 0 : n - 1) : (navIdx + delta + n) % n;
+    const a = orderedAnnotations[idx];
+    // An annotation whose lines are all blank renders no .annotation span
+    // (zero-width wraps are filtered out) — fall back to the line row the
+    // renderer marks for exactly this case, same as the click path does.
+    let anchor = document.querySelector('.annotation[data-annotation-id="' + cssEscape(a.id) + '"]');
+    if (!anchor) {
+      const row = document.querySelector('.line[data-line-level-annotation-id="' + cssEscape(a.id) + '"]');
+      anchor = row ? (row.querySelector('.line-content') || row) : null;
+    }
+    if (!anchor) return; // nothing rendered for it; leave nav state untouched
+    navIdx = idx;
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
     tooltip.dataset.annotationId = a.id;
     populateTooltip(a.id);
-    showTooltipAt(seg);
+    showTooltipAt(anchor);
     dismissHint();
     updateNavCounter();
   }
@@ -513,8 +527,7 @@
       if (tooltip.contains(e.target)) return;
       // The nav arrows open tooltips themselves — the click-away close
       // would otherwise fire right after and shut what they just opened.
-      const nav = document.getElementById('anno-nav');
-      if (nav && nav.contains(e.target)) return;
+      if (annoNav && annoNav.contains(e.target)) return;
 
       const hit = e.target.closest('.annotation');
       if (hit && hit.dataset.annotationId === tooltip.dataset.annotationId) return;

@@ -702,10 +702,7 @@
       el.annotationList.appendChild(hint);
       return;
     }
-    const sorted = state.submission.annotations.slice().sort(function (a, b) {
-      if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
-      return (a.range.startCol || 0) - (b.range.startCol || 0);
-    });
+    const sorted = state.submission.annotations.slice().sort(window.RedpenShared.annotationOrder);
     for (const a of sorted) el.annotationList.appendChild(buildSidebarEntry(a));
   }
 
