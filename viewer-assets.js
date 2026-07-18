@@ -170,6 +170,20 @@ html, body {
   border-right: 1px solid var(--border);
   background: var(--bg-muted);
   font-variant-numeric: tabular-nums;
+  position: relative;
+}
+/* Gutter marker matching author mode: annotated lines carry .is-annotated
+   from the shared renderer. */
+.line.is-annotated .line-number::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hl, var(--redpen));
 }
 .line-content {
   padding: 0 14px;
@@ -409,6 +423,20 @@ html, body {
 
 .hidden { display: none !important; }
 .hidden-screen { display: none; }
+
+/* --- Micro-interactions ------------------------------------------------ */
+@keyframes rp-pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tooltip:not(.hidden) { animation: rp-pop-in 130ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 /* --- Discoverability hint --------------------------------------------- */
 .viewer-hint {
