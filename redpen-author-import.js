@@ -201,9 +201,32 @@
     updateExportAllButton();
   }
 
+  // Initials + a stable hue derived from the label, so each student gets a
+  // recognizable avatar without any stored state.
+  function avatarFor(label) {
+    const parts = label.trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || '?';
+    const initials = (first[0] + (parts.length > 1 ? parts[parts.length - 1][0] : first[1] || '')).toUpperCase();
+    let hue = 0;
+    for (let i = 0; i < label.length; i++) hue = (hue * 31 + label.charCodeAt(i)) % 360;
+    const av = document.createElement('span');
+    av.className = 'queue-avatar';
+    av.setAttribute('aria-hidden', 'true');
+    av.style.background = 'hsl(' + hue + ' 45% 88%)';
+    av.style.color = 'hsl(' + hue + ' 45% 30%)';
+    av.textContent = initials;
+    return av;
+  }
+
   function renderQueueDrawer() {
     if (!el.queueList) return;
     el.queueCount.textContent = String(state.queue.length);
+    if (el.queueProgress) {
+      const annotated = state.queue.filter(function (s) {
+        return s.annotations && s.annotations.length > 0;
+      }).length;
+      el.queueProgress.textContent = annotated + '/' + state.queue.length + ' annotated';
+    }
     el.queueList.innerHTML = '';
     state.queue.forEach(function (s, i) {
       const li = document.createElement('li');
@@ -212,9 +235,11 @@
       li.setAttribute('data-idx', String(i));
       li.setAttribute('tabindex', '0');
       li.setAttribute('aria-selected', i === state.activeIdx ? 'true' : 'false');
+      const label = displayLabel(s);
+      li.appendChild(avatarFor(label));
       const nameSpan = document.createElement('span');
       nameSpan.className = 'queue-item-name';
-      nameSpan.textContent = displayLabel(s);
+      nameSpan.textContent = label;
       li.appendChild(nameSpan);
       if (s.annotations && s.annotations.length > 0) {
         const dot = document.createElement('span');

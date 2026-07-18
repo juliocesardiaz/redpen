@@ -327,6 +327,20 @@ body.queue-open .workspace {
   border-right: 1px solid var(--border);
   background: var(--bg-muted);
   font-variant-numeric: tabular-nums;
+  position: relative;
+}
+/* IDE-style gutter marker: any annotated line gets a dot in the tag colour
+   (--hl, set on the row for line-level annotations) or the accent. */
+.line.is-annotated .line-number::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hl, var(--accent));
 }
 
 .line-content {
@@ -442,14 +456,19 @@ body.queue-open .workspace {
 .annotation-item {
   padding: 10px 12px;
   border: 1px solid var(--border);
+  /* Left edge carries the annotation's primary-tag colour (--hl set inline
+     by the sidebar renderer) so each card visually pairs with its highlight. */
+  border-left: 3px solid var(--hl, var(--border));
   border-radius: var(--radius);
   background: var(--bg);
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 .annotation-item:hover {
   border-color: var(--border-strong);
+  border-left-color: var(--hl, var(--border-strong));
   box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 .annotation-item-head {
   display: flex;
@@ -1456,6 +1475,27 @@ body.queue-open .workspace {
 .queue-drawer-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.queue-progress {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.queue-avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .queue-drawer-title {
@@ -1557,4 +1597,30 @@ body.queue-open .workspace {
   display: flex;
   gap: 6px;
   flex: none;
+}
+
+/* --- Micro-interactions ------------------------------------------------ */
+
+@keyframes rp-pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tooltip:not(.hidden) { animation: rp-pop-in 130ms ease-out; }
+.comment-btn:not(.hidden) { animation: rp-pop-in 110ms ease-out; }
+
+/* Keyboard focus ring, consistent across every interactive control. */
+.btn:focus-visible, .btn-ghost:focus-visible, .view-toggle-btn:focus-visible,
+.tag-chip:focus-visible, .annotation-action:focus-visible,
+.comment-btn:focus-visible, .queue-drawer-handle:focus-visible,
+.queue-item:focus-visible, .md-code-copy:focus-visible,
+.tag-delete:focus-visible, .comment-block-delete:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

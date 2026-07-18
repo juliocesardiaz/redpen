@@ -714,6 +714,9 @@
     const item = document.createElement('div');
     item.className = 'annotation-item';
     item.dataset.annotationId = a.id;
+    // Left-edge colour pairs the card with its highlight in the code view.
+    const primaryTag = R.primaryTagForAnnotation(a);
+    if (primaryTag) item.style.setProperty('--hl', primaryTag.color);
 
     const head = document.createElement('div');
     head.className = 'annotation-item-head';
