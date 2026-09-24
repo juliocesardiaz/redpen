@@ -68,6 +68,7 @@ window.Redpen = {};
     folderInput: document.getElementById('folder-input'),
     csvInput: document.getElementById('csv-input'),
     btnImportGithub: document.getElementById('btn-import-github'),
+    btnEmptyGithub: document.getElementById('btn-empty-github'),
     githubModalBackdrop: document.getElementById('github-modal-backdrop'),
     githubUrls: document.getElementById('github-urls'),
     githubToken: document.getElementById('github-token'),
@@ -90,6 +91,7 @@ window.Redpen = {};
     queueDrawerHandle: document.getElementById('queue-drawer-handle'),
     queueList: document.getElementById('queue-list'),
     queueCount: document.getElementById('queue-count'),
+    queueProgress: document.getElementById('queue-progress'),
     autosaveStatus: document.getElementById('autosave-status'),
     btnBackupFile: document.getElementById('btn-backup-file'),
     restoreBanner: document.getElementById('restore-banner'),
@@ -412,6 +414,9 @@ window.Redpen = {};
 
         const row = document.createElement('div');
         row.className = 'line';
+        // Any annotation on this line (including width-0 wraps that render
+        // no span) earns the gutter dot marker.
+        if ((annotationsByLine[lineNum] || []).length > 0) row.classList.add('is-annotated');
         if (hasLineRange) row.classList.add('has-line-range');
         if (hasBlock) row.classList.add('has-block');
         // Smallest line-level annotation on this line is used as the fallback
@@ -422,6 +427,12 @@ window.Redpen = {};
           row.dataset.lineLevelAnnotationId = smallestLineLevel.id;
           const tag = R.primaryTagForAnnotation(smallestLineLevel);
           if (tag) row.style.setProperty('--hl', tag.color);
+        } else if (wraps.length > 0) {
+          // Span-only lines: colour the row (currently just the gutter dot)
+          // from the widest span's primary tag so the marker matches the
+          // highlight instead of the generic default.
+          const spanTag = R.primaryTagForAnnotation(wraps[0].annotation);
+          if (spanTag) row.style.setProperty('--hl', spanTag.color);
         }
         row.dataset.line = String(i + 1);
         const gutter = document.createElement('span');

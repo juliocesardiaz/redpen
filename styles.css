@@ -9,9 +9,15 @@
   --text: #1f2328;
   --text-muted: #5b6472;
   --text-faint: #8a93a1;
-  --accent: #2b6cb0;
-  --accent-strong: #1e4e8c;
+  /* Brand red — the app is called redpen; primary actions carry the pen's
+     color. Destructive controls stay distinguishable via the outline
+     .btn-danger treatment, never a solid fill. */
+  --accent: #c0392b;
+  --accent-strong: #922b21;
   --danger: #c0392b;
+  /* Standard focus treatment for inputs/fields; pairs with
+     border-color: var(--accent) at each :focus site. */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
   --shadow-sm: 0 1px 2px rgba(16, 22, 26, 0.08);
   --shadow-md: 0 4px 16px rgba(16, 22, 26, 0.12);
   --radius: 6px;
@@ -92,7 +98,7 @@ body {
 }
 .meta-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 #student-name { width: 170px; }
@@ -117,7 +123,7 @@ body {
 }
 .score-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 .score-slash {
   color: var(--text-muted);
@@ -200,6 +206,52 @@ body.queue-open .workspace {
   gap: 12px;
   min-height: 0;
 }
+/* Drop-target feedback while dragging files over the empty panel. */
+.code-empty.dragover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -8px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.empty-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 26px 16px 18px;
+}
+.empty-hero-glyph {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  margin-bottom: 2px;
+}
+.empty-hero-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.empty-hero-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.empty-hero-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.empty-drop-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
 
 .code-input {
   flex: 1;
@@ -218,14 +270,18 @@ body.queue-open .workspace {
   -moz-tab-size: 4;
 }
 .code-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  /* This textarea is huge and auto-focused on load — a full-accent red
+     border here reads as a validation error, so keep its focus muted. */
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
   background: var(--bg);
 }
 
 .code-empty-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 /* --- Rendered code view ---------------------------------------------- */
@@ -285,6 +341,20 @@ body.queue-open .workspace {
   border-right: 1px solid var(--border);
   background: var(--bg-muted);
   font-variant-numeric: tabular-nums;
+  position: relative;
+}
+/* IDE-style gutter marker: any annotated line gets a dot in the tag colour
+   (--hl, set on the row for line-level annotations) or the accent. */
+.line.is-annotated .line-number::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hl, var(--accent));
 }
 
 .line-content {
@@ -388,7 +458,7 @@ body.queue-open .workspace {
 }
 .overall-comment:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .annotation-list {
@@ -400,14 +470,19 @@ body.queue-open .workspace {
 .annotation-item {
   padding: 10px 12px;
   border: 1px solid var(--border);
+  /* Left edge carries the annotation's primary-tag colour (--hl set inline
+     by the sidebar renderer) so each card visually pairs with its highlight. */
+  border-left: 3px solid var(--hl, var(--border));
   border-radius: var(--radius);
   background: var(--bg);
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 .annotation-item:hover {
   border-color: var(--border-strong);
+  border-left-color: var(--hl, var(--border-strong));
   box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 .annotation-item-head {
   display: flex;
@@ -432,7 +507,7 @@ body.queue-open .workspace {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 10px;
-  background: rgba(43, 108, 176, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-strong);
   font-weight: 600;
 }
@@ -669,7 +744,7 @@ body.queue-open .workspace {
 .type-option input { position: absolute; opacity: 0; pointer-events: none; }
 .type-option:hover { background: var(--bg-muted); }
 .type-option.selected {
-  background: rgba(43, 108, 176, 0.10);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent-strong);
   font-weight: 600;
   box-shadow: inset 0 -2px 0 0 var(--accent);
@@ -759,7 +834,7 @@ body.queue-open .workspace {
 }
 .new-tag-label:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 /* Shared tag pill used in the tooltip and sidebar entries. */
@@ -839,7 +914,7 @@ body.queue-open .workspace {
 .tag-label-input:focus {
   background: var(--bg);
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .tag-delete {
@@ -898,7 +973,7 @@ body.queue-open .workspace {
 }
 .comment-block:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .comment-block-textarea {
@@ -1158,7 +1233,7 @@ body.queue-open .workspace {
 }
 .github-urls-input:focus, .github-token-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .github-token-input { width: 100%; }
@@ -1421,6 +1496,27 @@ body.queue-open .workspace {
 .queue-drawer-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.queue-progress {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.queue-avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .queue-drawer-title {
@@ -1522,6 +1618,32 @@ body.queue-open .workspace {
   display: flex;
   gap: 6px;
   flex: none;
+}
+
+/* --- Micro-interactions ------------------------------------------------ */
+
+@keyframes rp-pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tooltip:not(.hidden) { animation: rp-pop-in 130ms ease-out; }
+.comment-btn:not(.hidden) { animation: rp-pop-in 110ms ease-out; }
+
+/* Keyboard focus ring, consistent across every interactive control. */
+.btn:focus-visible, .btn-ghost:focus-visible, .view-toggle-btn:focus-visible,
+.tag-chip:focus-visible, .annotation-action:focus-visible,
+.comment-btn:focus-visible, .queue-drawer-handle:focus-visible,
+.queue-item:focus-visible, .md-code-copy:focus-visible,
+.tag-delete:focus-visible, .comment-block-delete:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* --- Comment snippet library ------------------------------------------ */

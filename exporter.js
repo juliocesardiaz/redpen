@@ -45,7 +45,8 @@
 
     let scoreBlock = '';
     if (submission.score && submission.score.earned !== null && submission.score.total !== null) {
-      scoreBlock = `<div class="score">${submission.score.earned} / ${submission.score.total}</div>`;
+      const tier = scoreTierClass(submission.score);
+      scoreBlock = `<div class="score${tier ? ' ' + tier : ''}">${submission.score.earned} / ${submission.score.total}</div>`;
     }
 
     let overallCommentBlock = '';
@@ -145,6 +146,19 @@
     return template.replace(/\{\{[A-Z_]+\}\}/g, function (placeholder) {
       return placeholder in subs ? subs[placeholder] : placeholder;
     });
+  }
+
+  // Soft color tier for the viewer's score badge. Neutral (no class) when
+  // the ratio can't be computed, so a missing or zero total never renders
+  // a colored badge.
+  function scoreTierClass(score) {
+    const earned = Number(score.earned);
+    const total = Number(score.total);
+    if (!Number.isFinite(earned) || !Number.isFinite(total) || total <= 0) return '';
+    const ratio = earned / total;
+    if (ratio >= 0.8) return 'score-high';
+    if (ratio >= 0.5) return 'score-mid';
+    return 'score-low';
   }
 
   function slugifyPart(s) {

@@ -1,8 +1,9 @@
-/* redpen — author mode: queue + folder/CSV import, batch export
+/* redpen — author mode: queue + folder/CSV/drag-drop import, batch export
  *
- * Owns the multi-submission queue: importing a folder of files, the optional
- * names CSV, switching between queue items, the queue drawer, navigation
- * arrows, and batch "Export all" via JSZip. Also owns the shared submission
+ * Owns the multi-submission queue: importing a folder of files (via the
+ * picker or drag-and-drop onto the empty panel), the optional names CSV,
+ * switching between queue items, the queue drawer, navigation arrows, and
+ * batch "Export all" via JSZip. Also owns the shared submission
  * builder (buildQueueSubmission) and filename helpers that the GitHub/CS50
  * modal (redpen-author-github.js) reuses via R. — imported submissions from
  * any source enter the queue through appendToQueue. See
@@ -112,7 +113,9 @@
       return keep;
     });
     if (!files.length) {
-      alert('No supported text files found in the picked folder.');
+      // Reached from both the folder picker and drag-and-drop — keep the
+      // wording source-neutral.
+      alert('No supported text files found in the selection.');
       return;
     }
     if (files.length > 100) {
@@ -198,9 +201,32 @@
     updateExportAllButton();
   }
 
+  // Initials + a stable hue derived from the label, so each student gets a
+  // recognizable avatar without any stored state.
+  function avatarFor(label) {
+    const parts = label.trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || '?';
+    const initials = (first[0] + (parts.length > 1 ? parts[parts.length - 1][0] : first[1] || '')).toUpperCase();
+    let hue = 0;
+    for (let i = 0; i < label.length; i++) hue = (hue * 31 + label.charCodeAt(i)) % 360;
+    const av = document.createElement('span');
+    av.className = 'queue-avatar';
+    av.setAttribute('aria-hidden', 'true');
+    av.style.background = 'hsl(' + hue + ' 45% 88%)';
+    av.style.color = 'hsl(' + hue + ' 45% 30%)';
+    av.textContent = initials;
+    return av;
+  }
+
   function renderQueueDrawer() {
     if (!el.queueList) return;
     el.queueCount.textContent = String(state.queue.length);
+    if (el.queueProgress) {
+      const annotated = state.queue.filter(function (s) {
+        return s.annotations && s.annotations.length > 0;
+      }).length;
+      el.queueProgress.textContent = annotated + '/' + state.queue.length + ' annotated';
+    }
     el.queueList.innerHTML = '';
     state.queue.forEach(function (s, i) {
       const li = document.createElement('li');
@@ -209,9 +235,11 @@
       li.setAttribute('data-idx', String(i));
       li.setAttribute('tabindex', '0');
       li.setAttribute('aria-selected', i === state.activeIdx ? 'true' : 'false');
+      const label = displayLabel(s);
+      li.appendChild(avatarFor(label));
       const nameSpan = document.createElement('span');
       nameSpan.className = 'queue-item-name';
-      nameSpan.textContent = displayLabel(s);
+      nameSpan.textContent = label;
       li.appendChild(nameSpan);
       if (s.annotations && s.annotations.length > 0) {
         const dot = document.createElement('span');
@@ -313,6 +341,73 @@
     el.btnPrev.addEventListener('click', prevSubmission);
     el.btnNext.addEventListener('click', nextSubmission);
     el.btnExportAll.addEventListener('click', exportAll);
+    wireDropZone();
+  }
+
+  // Drag & drop onto the empty panel is just another way into importFolder.
+  // Scoped to that panel so a stray drop can't dump files into an
+  // in-progress grading session.
+  function wireDropZone() {
+    const zone = el.codeEmpty;
+
+    // A drop anywhere else would make the browser navigate to the dropped
+    // file, replacing the app (and the grading session) — swallow drags
+    // globally and signal no-drop outside the zone.
+    window.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (!zone.contains(e.target) && e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    });
+    window.addEventListener('drop', function (e) { e.preventDefault(); });
+    let dragDepth = 0; // enter/leave fire per child element; track nesting
+    zone.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      dragDepth++;
+      zone.classList.add('dragover');
+    });
+    zone.addEventListener('dragover', function (e) { e.preventDefault(); });
+    zone.addEventListener('dragleave', function () {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) zone.classList.remove('dragover');
+    });
+    zone.addEventListener('drop', async function (e) {
+      e.preventDefault();
+      dragDepth = 0;
+      zone.classList.remove('dragover');
+      let files;
+      try {
+        files = await collectDroppedFiles(e.dataTransfer);
+      } catch (err) {
+        console.warn('redpen: reading dropped items failed', err);
+        return;
+      }
+      if (files.length) await importFolder(files);
+    });
+  }
+
+  // Dropped folders arrive as directory entries that must be walked
+  // recursively (readEntries returns results in batches until empty); plain
+  // files come straight off dataTransfer.files. webkitGetAsEntry is the only
+  // cross-browser way to tell the two apart.
+  async function collectDroppedFiles(dt) {
+    const entries = Array.from(dt.items || [])
+      .map(function (item) { return item.webkitGetAsEntry ? item.webkitGetAsEntry() : null; })
+      .filter(Boolean);
+    if (!entries.length) return Array.from(dt.files || []);
+    const out = [];
+    async function walk(entry) {
+      if (entry.isFile) {
+        out.push(await new Promise(function (res, rej) { entry.file(res, rej); }));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let batch;
+        do {
+          batch = await new Promise(function (res, rej) { reader.readEntries(res, rej); });
+          for (const child of batch) await walk(child);
+        } while (batch.length);
+      }
+    }
+    for (const entry of entries) await walk(entry);
+    return out;
   }
 
   function wireQueueDrawer() {

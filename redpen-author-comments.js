@@ -704,10 +704,7 @@
       el.annotationList.appendChild(hint);
       return;
     }
-    const sorted = state.submission.annotations.slice().sort(function (a, b) {
-      if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
-      return (a.range.startCol || 0) - (b.range.startCol || 0);
-    });
+    const sorted = state.submission.annotations.slice().sort(window.RedpenShared.annotationOrder);
     for (const a of sorted) el.annotationList.appendChild(buildSidebarEntry(a));
   }
 
@@ -719,6 +716,9 @@
     const item = document.createElement('div');
     item.className = 'annotation-item';
     item.dataset.annotationId = a.id;
+    // Left-edge colour pairs the card with its highlight in the code view.
+    const primaryTag = R.primaryTagForAnnotation(a);
+    if (primaryTag) item.style.setProperty('--hl', primaryTag.color);
 
     const head = document.createElement('div');
     head.className = 'annotation-item-head';
